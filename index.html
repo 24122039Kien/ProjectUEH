@@ -52,6 +52,15 @@
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 import { ARButton } from 'https://unpkg.com/three@0.160.0/examples/jsm/webxr/ARButton.js';
 
+/* ================== CẤU HÌNH ================== */
+const CELL_SIZE = 0.25;
+const WALL_THICKNESS = 0.04;
+const WALL_HEIGHT = 0.28;
+const PLAYER_RADIUS = 0.05;
+const MOVE_SPEED = 0.012;
+const ROT_SPEED = 0.05;
+
+/* ================== BIẾN ================== */
 let scene, camera, renderer, controller, reticle;
 let hitTestSource=null, hitTestRequested=false;
 
@@ -62,7 +71,7 @@ let gameStarted=false, hasKey=false, gameEnded=false;
 let moveForward=false, rotateLeft=false, rotateRight=false;
 let startTime=0;
 
-// ===== MAZE MAP =====
+/* ================== MAZE MAP ================== */
 const mazeMap=[
  [1,1,1,1,1,1,1],
  [1,0,0,0,0,0,1],
@@ -73,22 +82,19 @@ const mazeMap=[
  [1,1,1,1,1,1,1],
 ];
 
-const CELL_SIZE=0.25;
-
 init();
 animate();
 
+/* ================== INIT ================== */
 function init(){
     scene=new THREE.Scene();
     camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.01,20);
-
     scene.add(new THREE.HemisphereLight(0xffffff,0xbbbbff,1));
 
     renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});
     renderer.setSize(innerWidth,innerHeight);
     renderer.xr.enabled=true;
     document.body.appendChild(renderer.domElement);
-
     document.body.appendChild(ARButton.createButton(renderer,{requiredFeatures:['hit-test']}));
 
     controller=renderer.xr.getController(0);
@@ -115,6 +121,7 @@ function setupUI(){
     btnRight.ontouchend=()=>rotateRight=false;
 }
 
+/* ================== SPAWN ================== */
 function onSelect(){
     if(reticle.visible && !gameStarted) spawnGame(reticle.matrix);
 }
@@ -125,8 +132,8 @@ function spawnGame(matrix){
     hasKey=false;
     startTime=performance.now();
 
-    document.getElementById('overlay').style.display='block';
-    document.getElementById('instructions').innerText='Tìm chìa khóa để mở cổng';
+    overlay.style.display='block';
+    instructions.innerText='Tìm chìa khóa để mở cổng';
 
     mazeGroup=new THREE.Group();
     mazeGroup.position.setFromMatrixPosition(matrix);
@@ -140,17 +147,19 @@ function spawnGame(matrix){
     createMazeWalls();
 
     player=new THREE.Mesh(
-        new THREE.SphereGeometry(0.05),
+        new THREE.SphereGeometry(PLAYER_RADIUS),
         new THREE.MeshPhongMaterial({color:0xff0000})
     );
     player.position.set(0,0.15,0.8);
     mazeGroup.add(player);
 
-    player.add(new THREE.ArrowHelper(
+    const arrow=new THREE.ArrowHelper(
         new THREE.Vector3(0,0,-1),
         new THREE.Vector3(0,0.1,0),
         0.18,0xffaa00
-    ));
+    );
+    player.add(arrow);
+    player.userData.arrow=arrow;
 
     keyItem=new THREE.Mesh(
         new THREE.SphereGeometry(0.06),
@@ -167,46 +176,65 @@ function spawnGame(matrix){
     mazeGroup.add(gate);
 }
 
+/* ================== TƯỜNG MỎNG ================== */
 function createMazeWalls(){
     walls=[];
-    const geo=new THREE.BoxGeometry(CELL_SIZE,0.3,CELL_SIZE);
     const mat=new THREE.MeshPhongMaterial({color:0x555555});
 
     for(let z=0;z<mazeMap.length;z++){
         for(let x=0;x<mazeMap[z].length;x++){
-            if(mazeMap[z][x]){
-                const w=new THREE.Mesh(geo,mat);
-                w.position.set((x-3)*CELL_SIZE,0.15,(z-3)*CELL_SIZE);
-                mazeGroup.add(w);
-                walls.push(w);
+            if(mazeMap[z][x]===1){
+                const wall=new THREE.Mesh(
+                    new THREE.BoxGeometry(WALL_THICKNESS,WALL_HEIGHT,CELL_SIZE),
+                    mat
+                );
+                wall.position.set(
+                    (x-3)*CELL_SIZE,
+                    WALL_HEIGHT/2,
+                    (z-3)*CELL_SIZE
+                );
+                mazeGroup.add(wall);
+                walls.push(wall);
             }
         }
     }
 }
 
-function checkCollision(nextPos){
-    const box=new THREE.Box3().setFromCenterAndSize(
-        nextPos,new THREE.Vector3(0.1,0.1,0.1)
-    );
+/* ================== COLLISION (KHÔNG XUYÊN) ================== */
+function checkCollisionSphere(pos){
     for(const w of walls){
-        if(box.intersectsBox(new THREE.Box3().setFromObject(w))) return true;
+        const box=new THREE.Box3().setFromObject(w);
+        const closest=box.clampPoint(pos.clone(),new THREE.Vector3());
+        if(closest.distanceTo(pos)<PLAYER_RADIUS){
+            return true;
+        }
     }
     return false;
 }
 
+/* ================== UPDATE ================== */
 function updateGame(){
     if(!gameStarted||gameEnded) return;
 
-    const speed=0.012, rot=0.05;
+    if(rotateLeft) player.rotation.y+=ROT_SPEED;
+    if(rotateRight) player.rotation.y-=ROT_SPEED;
 
-    if(rotateLeft) player.rotation.y+=rot;
-    if(rotateRight) player.rotation.y-=rot;
+    // cập nhật mũi tên đúng hướng
+    const forward=new THREE.Vector3(0,0,-1)
+        .applyQuaternion(player.quaternion)
+        .normalize();
+    player.userData.arrow.setDirection(forward);
 
     if(moveForward){
-        const dir=new THREE.Vector3();
-        player.getWorldDirection(dir);
-        const next=player.position.clone().add(dir.multiplyScalar(speed));
-        if(!checkCollision(next)) player.position.copy(next);
+        const steps=5;
+        const stepSize=MOVE_SPEED/steps;
+        for(let i=0;i<steps;i++){
+            const next=player.position.clone()
+                .add(forward.clone().multiplyScalar(stepSize));
+            if(!checkCollisionSphere(next)){
+                player.position.copy(next);
+            }else break;
+        }
     }
 
     if(!hasKey){
@@ -220,12 +248,13 @@ function updateGame(){
 
     if(hasKey && player.position.distanceTo(gate.position)<0.2){
         gameEnded=true;
-        instructions.innerText=`CHIẾN THẮNG! ${(performance.now()-startTime)/1000}s`;
+        instructions.innerText=`CHIẾN THẮNG! ${((performance.now()-startTime)/1000).toFixed(1)}s`;
     }
 
     timer.innerText=`⏱ ${((performance.now()-startTime)/1000).toFixed(1)}s`;
 }
 
+/* ================== RENDER ================== */
 function animate(){
     renderer.setAnimationLoop(render);
 }
@@ -234,14 +263,12 @@ function render(_,frame){
     if(frame){
         const session=renderer.xr.getSession();
         const ref=renderer.xr.getReferenceSpace();
-
         if(!hitTestRequested){
             session.requestReferenceSpace('viewer').then(s=>{
                 session.requestHitTestSource({space:s}).then(src=>hitTestSource=src);
             });
             hitTestRequested=true;
         }
-
         if(hitTestSource){
             const hits=frame.getHitTestResults(hitTestSource);
             if(hits.length){
