@@ -5,56 +5,41 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
-        body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; }
+        body { margin:0; overflow:hidden; font-family:Arial; }
 
-        #instructions {
-            position: absolute;
-            top: 20px;
-            width: 100%;
-            text-align: center;
-            color: white;
-            background: rgba(0,0,0,0.6);
-            padding: 10px;
-            z-index: 10;
+        #instructions, #timer {
+            position:absolute;
+            left:50%;
+            transform:translateX(-50%);
+            color:white;
+            background:rgba(0,0,0,0.6);
+            padding:8px 16px;
+            border-radius:20px;
+            z-index:10;
         }
-
-        #timer {
-            position: absolute;
-            top: 70px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: white;
-            background: rgba(0,0,0,0.6);
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 18px;
-            z-index: 10;
-        }
+        #instructions { top:20px; }
+        #timer { top:65px; }
 
         #overlay {
-            position: absolute;
-            bottom: 20px;
-            left: 0;
-            width: 100%;
-            text-align: center;
-            display: none;
-            z-index: 10;
+            position:absolute;
+            bottom:20px;
+            width:100%;
+            text-align:center;
+            display:none;
+            z-index:10;
         }
-
         .btn {
-            padding: 15px 30px;
-            font-size: 20px;
-            background: rgba(255,255,255,0.85);
-            border: none;
-            border-radius: 50px;
-            margin: 0 10px;
-            font-weight: bold;
+            padding:14px 28px;
+            font-size:18px;
+            border:none;
+            border-radius:50px;
+            background:rgba(255,255,255,0.85);
         }
     </style>
 </head>
 <body>
 
-<div id="instructions">Rà camera xuống đất, chạm để đặt mê cung</div>
+<div id="instructions">Rà camera xuống đất và chạm để đặt mê cung</div>
 <div id="timer">⏱ 0.0s</div>
 
 <div id="overlay">
@@ -67,247 +52,206 @@
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 import { ARButton } from 'https://unpkg.com/three@0.160.0/examples/jsm/webxr/ARButton.js';
 
-let camera, scene, renderer;
-let controller, reticle;
-let hitTestSource = null;
-let hitTestRequested = false;
+let scene, camera, renderer, controller, reticle;
+let hitTestSource=null, hitTestRequested=false;
 
 let mazeGroup, player, keyItem, gate;
-let walls = [];
+let walls=[];
 
-let gameStarted = false;
-let hasKey = false;
-let gameEnded = false;
+let gameStarted=false, hasKey=false, gameEnded=false;
+let moveForward=false, rotateLeft=false, rotateRight=false;
+let startTime=0;
 
-let moveForward = false;
-let rotateLeft = false;
-let rotateRight = false;
-
-let startTime = 0;
-
-// ===== MA TRẬN MÊ CUNG =====
-const mazeMap = [
-    [1,1,1,1,1,1,1],
-    [1,0,0,0,0,0,1],
-    [1,0,1,1,1,0,1],
-    [1,0,1,0,1,0,1],
-    [1,0,1,0,0,0,1],
-    [1,0,0,0,1,0,1],
-    [1,1,1,1,1,1,1],
+// ===== MAZE MAP =====
+const mazeMap=[
+ [1,1,1,1,1,1,1],
+ [1,0,0,0,0,0,1],
+ [1,0,1,1,1,0,1],
+ [1,0,1,0,1,0,1],
+ [1,0,1,0,0,0,1],
+ [1,0,0,0,1,0,1],
+ [1,1,1,1,1,1,1],
 ];
+
+const CELL_SIZE=0.25;
 
 init();
 animate();
 
-// ===== INIT =====
-function init() {
-    scene = new THREE.Scene();
+function init(){
+    scene=new THREE.Scene();
+    camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.01,20);
 
-    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+    scene.add(new THREE.HemisphereLight(0xffffff,0xbbbbff,1));
 
-    const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-    scene.add(light);
-
-    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.xr.enabled = true;
+    renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});
+    renderer.setSize(innerWidth,innerHeight);
+    renderer.xr.enabled=true;
     document.body.appendChild(renderer.domElement);
 
-    document.body.appendChild(
-        ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] })
-    );
+    document.body.appendChild(ARButton.createButton(renderer,{requiredFeatures:['hit-test']}));
 
-    controller = renderer.xr.getController(0);
-    controller.addEventListener('select', onSelect);
+    controller=renderer.xr.getController(0);
+    controller.addEventListener('select',onSelect);
     scene.add(controller);
 
-    reticle = new THREE.Mesh(
-        new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2),
-        new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+    reticle=new THREE.Mesh(
+        new THREE.RingGeometry(0.12,0.16,32).rotateX(-Math.PI/2),
+        new THREE.MeshBasicMaterial({color:0x00ff00})
     );
-    reticle.matrixAutoUpdate = false;
-    reticle.visible = false;
+    reticle.matrixAutoUpdate=false;
+    reticle.visible=false;
     scene.add(reticle);
 
     setupUI();
 }
 
-// ===== UI =====
-function setupUI() {
-    btnGo.addEventListener('touchstart', () => moveForward = true);
-    btnGo.addEventListener('touchend', () => moveForward = false);
-    btnLeft.addEventListener('touchstart', () => rotateLeft = true);
-    btnLeft.addEventListener('touchend', () => rotateLeft = false);
-    btnRight.addEventListener('touchstart', () => rotateRight = true);
-    btnRight.addEventListener('touchend', () => rotateRight = false);
+function setupUI(){
+    btnGo.ontouchstart=()=>moveForward=true;
+    btnGo.ontouchend=()=>moveForward=false;
+    btnLeft.ontouchstart=()=>rotateLeft=true;
+    btnLeft.ontouchend=()=>rotateLeft=false;
+    btnRight.ontouchstart=()=>rotateRight=true;
+    btnRight.ontouchend=()=>rotateRight=false;
 }
 
-// ===== SPAWN GAME =====
-function onSelect() {
-    if (reticle.visible && !gameStarted) {
-        spawnGame(reticle.matrix);
-    }
+function onSelect(){
+    if(reticle.visible && !gameStarted) spawnGame(reticle.matrix);
 }
 
-function spawnGame(matrix) {
-    gameStarted = true;
-    gameEnded = false;
-    hasKey = false;
-    startTime = performance.now();
+function spawnGame(matrix){
+    gameStarted=true;
+    gameEnded=false;
+    hasKey=false;
+    startTime=performance.now();
 
-    document.getElementById('overlay').style.display = 'block';
-    document.getElementById('instructions').innerText = "Tìm chìa khóa để mở cổng";
+    document.getElementById('overlay').style.display='block';
+    document.getElementById('instructions').innerText='Tìm chìa khóa để mở cổng';
 
-    mazeGroup = new THREE.Group();
+    mazeGroup=new THREE.Group();
     mazeGroup.position.setFromMatrixPosition(matrix);
     scene.add(mazeGroup);
 
-    const floor = new THREE.Mesh(
-        new THREE.BoxGeometry(3, 0.05, 3),
-        new THREE.MeshPhongMaterial({ color: 0x808080 })
-    );
-    mazeGroup.add(floor);
+    mazeGroup.add(new THREE.Mesh(
+        new THREE.BoxGeometry(2,0.05,2),
+        new THREE.MeshPhongMaterial({color:0x808080})
+    ));
 
     createMazeWalls();
 
-    // PLAYER
-    player = new THREE.Mesh(
-        new THREE.SphereGeometry(0.08),
-        new THREE.MeshPhongMaterial({ color: 0xff0000 })
+    player=new THREE.Mesh(
+        new THREE.SphereGeometry(0.05),
+        new THREE.MeshPhongMaterial({color:0xff0000})
     );
-    player.position.set(0, 0.2, 1.0);
+    player.position.set(0,0.15,0.8);
     mazeGroup.add(player);
 
-    // Arrow hướng
-    const arrow = new THREE.ArrowHelper(
+    player.add(new THREE.ArrowHelper(
         new THREE.Vector3(0,0,-1),
-        new THREE.Vector3(0,0.15,0),
-        0.25,
-        0xffaa00
-    );
-    player.add(arrow);
+        new THREE.Vector3(0,0.1,0),
+        0.18,0xffaa00
+    ));
 
-    // KEY
-    keyItem = new THREE.Mesh(
-        new THREE.SphereGeometry(0.1),
-        new THREE.MeshStandardMaterial({
-            color: 0xffff00,
-            emissive: 0xffcc00
-        })
+    keyItem=new THREE.Mesh(
+        new THREE.SphereGeometry(0.06),
+        new THREE.MeshStandardMaterial({color:0xffff00,emissive:0xffcc00})
     );
-    keyItem.position.set(0.6, 0.3, -0.6);
+    keyItem.position.set(0.5,0.2,-0.5);
     mazeGroup.add(keyItem);
 
-    // GATE
-    gate = new THREE.Mesh(
-        new THREE.BoxGeometry(0.4, 0.8, 0.1),
-        new THREE.MeshPhongMaterial({ color: 0x0000ff })
+    gate=new THREE.Mesh(
+        new THREE.BoxGeometry(0.25,0.4,0.08),
+        new THREE.MeshPhongMaterial({color:0x0000ff})
     );
-    gate.position.set(-0.6, 0.4, -1.0);
+    gate.position.set(-0.5,0.2,-0.8);
     mazeGroup.add(gate);
 }
 
-// ===== CREATE WALLS =====
-function createMazeWalls() {
-    walls = [];
-    const size = 0.4;
-    const geo = new THREE.BoxGeometry(size, 0.5, size);
-    const mat = new THREE.MeshPhongMaterial({ color: 0x555555 });
+function createMazeWalls(){
+    walls=[];
+    const geo=new THREE.BoxGeometry(CELL_SIZE,0.3,CELL_SIZE);
+    const mat=new THREE.MeshPhongMaterial({color:0x555555});
 
-    for (let z = 0; z < mazeMap.length; z++) {
-        for (let x = 0; x < mazeMap[z].length; x++) {
-            if (mazeMap[z][x] === 1) {
-                const wall = new THREE.Mesh(geo, mat);
-                wall.position.set((x - 3) * size, 0.25, (z - 3) * size);
-                mazeGroup.add(wall);
-                walls.push(wall);
+    for(let z=0;z<mazeMap.length;z++){
+        for(let x=0;x<mazeMap[z].length;x++){
+            if(mazeMap[z][x]){
+                const w=new THREE.Mesh(geo,mat);
+                w.position.set((x-3)*CELL_SIZE,0.15,(z-3)*CELL_SIZE);
+                mazeGroup.add(w);
+                walls.push(w);
             }
         }
     }
 }
 
-// ===== COLLISION =====
-function checkCollision(nextPos) {
-    const playerBox = new THREE.Box3().setFromCenterAndSize(
-        nextPos,
-        new THREE.Vector3(0.15, 0.15, 0.15)
+function checkCollision(nextPos){
+    const box=new THREE.Box3().setFromCenterAndSize(
+        nextPos,new THREE.Vector3(0.1,0.1,0.1)
     );
-    for (const wall of walls) {
-        const wallBox = new THREE.Box3().setFromObject(wall);
-        if (playerBox.intersectsBox(wallBox)) return true;
+    for(const w of walls){
+        if(box.intersectsBox(new THREE.Box3().setFromObject(w))) return true;
     }
     return false;
 }
 
-// ===== GAME LOOP =====
-function updateGame() {
-    if (!gameStarted || gameEnded) return;
+function updateGame(){
+    if(!gameStarted||gameEnded) return;
 
-    const speed = 0.02;
-    const rotSpeed = 0.05;
+    const speed=0.012, rot=0.05;
 
-    if (rotateLeft) player.rotation.y += rotSpeed;
-    if (rotateRight) player.rotation.y -= rotSpeed;
+    if(rotateLeft) player.rotation.y+=rot;
+    if(rotateRight) player.rotation.y-=rot;
 
-    if (moveForward) {
-        const dir = new THREE.Vector3();
+    if(moveForward){
+        const dir=new THREE.Vector3();
         player.getWorldDirection(dir);
-        const nextPos = player.position.clone().add(dir.multiplyScalar(speed));
-        if (!checkCollision(nextPos)) player.position.copy(nextPos);
+        const next=player.position.clone().add(dir.multiplyScalar(speed));
+        if(!checkCollision(next)) player.position.copy(next);
     }
 
-    // KEY EFFECT
-    if (!hasKey) {
-        keyItem.position.y = 0.3 + Math.sin(performance.now()*0.003)*0.05;
-        if (player.position.distanceTo(keyItem.position) < 0.2) {
-            hasKey = true;
-            keyItem.visible = false;
-            document.getElementById('instructions').innerText = "Đã có chìa khóa!";
+    if(!hasKey){
+        keyItem.position.y=0.2+Math.sin(performance.now()*0.004)*0.04;
+        if(player.position.distanceTo(keyItem.position)<0.15){
+            hasKey=true;
+            keyItem.visible=false;
+            instructions.innerText='Đã có chìa khóa!';
         }
     }
 
-    // WIN
-    if (hasKey && player.position.distanceTo(gate.position) < 0.3) {
-        gameEnded = true;
-        const t = ((performance.now()-startTime)/1000).toFixed(1);
-        document.getElementById('instructions').innerText = `CHIẾN THẮNG! ${t}s`;
+    if(hasKey && player.position.distanceTo(gate.position)<0.2){
+        gameEnded=true;
+        instructions.innerText=`CHIẾN THẮNG! ${(performance.now()-startTime)/1000}s`;
     }
 
-    // TIMER
-    if (!gameEnded) {
-        const elapsed = (performance.now() - startTime) / 1000;
-        document.getElementById('timer').innerText = `⏱ ${elapsed.toFixed(1)}s`;
-    }
+    timer.innerText=`⏱ ${((performance.now()-startTime)/1000).toFixed(1)}s`;
 }
 
-// ===== RENDER =====
-function animate() {
+function animate(){
     renderer.setAnimationLoop(render);
 }
 
-function render(_, frame) {
-    if (frame) {
-        const session = renderer.xr.getSession();
-        const refSpace = renderer.xr.getReferenceSpace();
+function render(_,frame){
+    if(frame){
+        const session=renderer.xr.getSession();
+        const ref=renderer.xr.getReferenceSpace();
 
-        if (!hitTestRequested) {
-            session.requestReferenceSpace('viewer').then(space => {
-                session.requestHitTestSource({ space }).then(src => hitTestSource = src);
+        if(!hitTestRequested){
+            session.requestReferenceSpace('viewer').then(s=>{
+                session.requestHitTestSource({space:s}).then(src=>hitTestSource=src);
             });
-            hitTestRequested = true;
+            hitTestRequested=true;
         }
 
-        if (hitTestSource) {
-            const hits = frame.getHitTestResults(hitTestSource);
-            if (hits.length > 0) {
-                reticle.visible = true;
-                reticle.matrix.fromArray(hits[0].getPose(refSpace).transform.matrix);
+        if(hitTestSource){
+            const hits=frame.getHitTestResults(hitTestSource);
+            if(hits.length){
+                reticle.visible=true;
+                reticle.matrix.fromArray(hits[0].getPose(ref).transform.matrix);
             }
         }
     }
-
     updateGame();
-    renderer.render(scene, camera);
+    renderer.render(scene,camera);
 }
 </script>
 </body>
