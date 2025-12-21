@@ -103,41 +103,136 @@
         }
 
         // Hàm tạo game tại vị trí ngắm
-        function spawnGame(matrix) {
-            gameStarted = true;
-            reticle.visible = false; // Ẩn vòng ngắm đi
-            document.getElementById('instructions').innerText = "Hãy tìm Chìa khóa (Màu Vàng) để mở Cổng (Màu Xanh)!";
-            document.getElementById('overlay').style.display = 'block'; // Hiện nút điều khiển
+        // Cấu hình bản đồ Mê cung (1: Tường, 0: Đường đi, 9: Cổng ra)
+// Bạn có thể sửa map này tùy ý, miễn là giữ khung tường bao quanh
+    const mapDesign = [
+                [1, 1, 1, 1, 1, 1, 1],
+                [1, 0, 0, 0, 1, 0, 1],
+                [1, 0, 1, 0, 1, 0, 1],
+                [1, 0, 1, 0, 0, 0, 1],
+                [1, 0, 1, 1, 1, 9, 1], // Số 9 là vị trí cổng ra
+                [1, 0, 0, 0, 0, 0, 1],
+                [1, 1, 1, 1, 1, 1, 1]
+                ];
 
-            // 1. Tạo Mê cung (Đại diện bằng cái hộp màu xám)
-            mazeGroup = new THREE.Group();
-            mazeGroup.position.setFromMatrixPosition(matrix); // Đặt tại vị trí ngắm
-            scene.add(mazeGroup);
+    function spawnGame(matrix) {
+        gameStarted = true;
+        reticle.visible = false;
+        document.getElementById('instructions').innerText = "Hãy điều khiển Nghêu theo mũi tên để tìm chìa khóa!";
+        document.getElementById('overlay').style.display = 'block';
 
-            // Sàn mê cung
-            const floor = new THREE.Mesh(new THREE.BoxGeometry(2, 0.1, 2), new THREE.MeshPhongMaterial({ color: 0x808080 }));
-            mazeGroup.add(floor);
+        mazeGroup = new THREE.Group();
+        mazeGroup.position.setFromMatrixPosition(matrix);
 
-            // Tường (Ví dụ 1 bức tường)
-            const wall = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 0.1), new THREE.MeshPhongMaterial({ color: 0x555555 }));
-            wall.position.set(0, 0.25, -1);
-            mazeGroup.add(wall);
+        // --- 1. THU NHỎ TOÀN BỘ GAME ---
+        // Giảm xuống còn 30% kích thước thật (vừa vặn trên sàn nhà nhỏ)
+        mazeGroup.scale.set(0.3, 0.3, 0.3); 
+        scene.add(mazeGroup);
 
-            // 2. Tạo Key (Chìa khóa - Hình cầu vàng)
-            keyItem = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshPhongMaterial({ color: 0xFFFF00 }));
-            keyItem.position.set(0.5, 0.3, 0.5); // Vị trí so với tâm mê cung
-            mazeGroup.add(keyItem);
+        // --- 2. XÂY DỰNG MÊ CUNG TỪ MAP DESIGN ---
+        const unitSize = 0.5; // Kích thước mỗi ô vuông
+        const wallGeo = new THREE.BoxGeometry(unitSize, 0.4, unitSize); // Tường cao 0.4
+        const wallMat = new THREE.MeshPhongMaterial({ color: 0x8B4513 }); // Màu nâu đất
 
-            // 3. Tạo Cổng ra (Hình hộp xanh dương)
-            gate = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.8, 0.1), new THREE.MeshPhongMaterial({ color: 0x0000FF }));
-            gate.position.set(-0.5, 0.4, -0.8);
-            mazeGroup.add(gate);
+        // Tạo sàn (Floor) to bao trùm cả map
+        const width = mapDesign[0].length * unitSize;
+        const height = mapDesign.length * unitSize;
+        const floor = new THREE.Mesh(
+            new THREE.BoxGeometry(width, 0.05, height),
+            new THREE.MeshPhongMaterial({ color: 0xcccccc })
+        );
+        // Căn giữa sàn
+        floor.position.set((width/2) - (unitSize/2), -0.05, (height/2) - (unitSize/2)); 
+        mazeGroup.add(floor);
 
-            // 4. Tạo Nhân vật "Nghêu" (Hình cầu đỏ)
-            // SAU NÀY BẠN SẼ THAY ĐOẠN NÀY BẰNG MODEL 3D
-            player = new THREE.Mesh(new THREE.SphereGeometry(0.08), new THREE.MeshPhongMaterial({ color: 0xFF0000 }));
-            player.position.set(0, 0.2, 0.8); // Điểm xuất phát
-            mazeGroup.add(player); // Add player vào group để nó đi theo mê cung
+        // Duyệt qua mảng để xây tường
+        for (let row = 0; row < mapDesign.length; row++) {
+            for (let col = 0; col < mapDesign[row].length; col++) {
+                const type = mapDesign[row][col];
+                const x = col * unitSize;
+                const z = row * unitSize;
+
+                if (type === 1) { // 1 là Tường
+                    const wall = new THREE.Mesh(wallGeo, wallMat);
+                    wall.position.set(x, 0.2, z);
+                    mazeGroup.add(wall);
+                } else if (type === 9) { // 9 là Cổng ra
+                    gate = new THREE.Mesh(
+                        new THREE.BoxGeometry(unitSize, 0.6, 0.1),
+                        new THREE.MeshPhongMaterial({ color: 0x0000FF, transparent: true, opacity: 0.7 })
+                    );
+                    gate.position.set(x, 0.3, z);
+                    mazeGroup.add(gate);
+                }
+            }
+        }
+
+        // --- 3. TẠO KEY CÓ MARKER NỔI ---
+        // Đặt key ở một vị trí trống (Ví dụ: hàng 1, cột 1)
+        keyItem = new THREE.Group();
+        keyItem.position.set(1 * unitSize, 0.1, 1 * unitSize); // Sửa tọa độ ở đây nếu muốn đổi chỗ Key
+
+        // Viên ngọc chìa khóa
+        const keyMesh = new THREE.Mesh(new THREE.SphereGeometry(0.08), new THREE.MeshPhongMaterial({ color: 0xFFFF00, emissive: 0x444400 }));
+        keyItem.add(keyMesh);
+
+        // Marker chỉ dẫn (Hình nón ngược trên đầu Key)
+        const keyMarker = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.1, 8), new THREE.MeshBasicMaterial({ color: 0xFFFF00 }));
+        keyMarker.position.y = 0.25; // Cao hơn viên ngọc
+        keyMarker.rotation.z = Math.PI; // Chổng ngược xuống
+        keyItem.add(keyMarker);
+
+        // Animation xoay cho Key (đưa vào biến user data để update sau)
+        keyItem.userData = { rotate: true };
+        mazeGroup.add(keyItem);
+
+
+        // --- 4. TẠO PLAYER CÓ MŨI TÊN ---
+        // Vị trí xuất phát: Hàng 5, Cột 1 (Dựa theo mapDesign ở trên chỗ nào số 0)
+        const startX = 1 * unitSize;
+        const startZ = 5 * unitSize;
+
+        const loader = new GLTFLoader();
+        loader.load('./ngheu.glb', function (gltf) {
+            player = gltf.scene;
+            player.scale.set(0.05, 0.05, 0.05); 
+            player.position.set(startX, 0.05, startZ);
+
+            // --- TẠO MŨI TÊN CHỈ HƯỚNG ---
+            // Mũi tên này là con (child) của Player -> Player xoay, mũi tên xoay theo
+            const arrowGroup = new THREE.Group();
+            
+            // Thân mũi tên
+            const arrowShaft = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 2), new THREE.MeshBasicMaterial({ color: 0x00FF00 })); // Màu xanh lá
+            arrowShaft.scale.set(0.1, 0.05, 0.3);
+            arrowShaft.position.z = -0.5; // Đẩy ra phía trước mặt
+            
+            // Đầu mũi tên
+            const arrowHead = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.2, 8), new THREE.MeshBasicMaterial({ color: 0x00FF00 }));
+            arrowHead.rotation.x = -Math.PI / 2; // Chĩa về phía trước
+            arrowHead.position.z = -0.8; // Ở đầu mũi tên
+
+            arrowGroup.add(arrowShaft);
+            arrowGroup.add(arrowHead);
+
+            // Đặt mũi tên lên trên đầu nhân vật (cao hơn trục Y)
+            arrowGroup.position.y = 1.5; // Cao lên trên đầu (tùy chỉnh số này nếu model Nghêu thấp/cao)
+            
+            player.add(arrowGroup); // Gắn chặt vào người chơi
+            mazeGroup.add(player);
+
+        }, undefined, function(e) {
+            console.error(e);
+            // Fallback nếu không có model: Dùng hộp đỏ
+            player = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.1), new THREE.MeshStandardMaterial({color:0xff0000}));
+            player.position.set(startX, 0.1, startZ);
+            
+            // Vẫn thêm mũi tên cho hộp đỏ
+            const arrow = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,0,0), 0.5, 0x00FF00);
+            player.add(arrow);
+            
+            mazeGroup.add(player);
+            });
         }
 
         function setupUI() {
@@ -157,6 +252,14 @@
         }
 
         function updateGameLogic() {
+
+            if (keyItem && keyItem.visible) {
+                keyItem.rotation.y += 0.05; // Xoay chìa khóa tại chỗ
+                // Làm marker nhấp nhô
+                keyItem.children[1].position.y = 0.25 + Math.sin(Date.now() * 0.005) * 0.05;
+            }
+            // ---------------------
+        
             if (!gameStarted || !player) return;
 
             // 1. Di chuyển nhân vật
