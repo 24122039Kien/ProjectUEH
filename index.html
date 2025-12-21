@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <title>Nghêu Thần Thú - AR Maze</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+        body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; }
+        /* Giao diện UI đè lên màn hình AR */
+        #overlay {
+            position: absolute; bottom: 20px; left: 0; width: 100%;
+            text-align: center; display: none; pointer-events: none; z-index: 999;
+        }
+        .btn {
+            pointer-events: auto; padding: 15px 30px; font-size: 20px;
+            background: rgba(255, 255, 255, 0.8); border: none; border-radius: 50px; margin: 0 10px;
+            font-weight: bold; color: #333; touch-action: manipulation;
+        }
+        #instructions {
+            position: absolute; top: 20px; width: 100%; text-align: center;
+            color: white; background: rgba(0,0,0,0.5); padding: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="instructions">Rà camera xuống đất để tìm mặt phẳng, sau đó chạm để đặt Mê Cung.</div>
+    
+    <div id="overlay">
+        <button class="btn" id="btnLeft">⬅️ Xoay</button>
+        <button class="btn" id="btnGo">Đi Thẳng ⬆️</button>
+        <button class="btn" id="btnRight">Xoay ➡️</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+        import { ARButton } from 'https://unpkg.com/three@0.160.0/examples/jsm/webxr/ARButton.js';
+
+        let container;
+        let camera, scene, renderer;
+        let controller;
+        let reticle; // Cái vòng tròn ngắm xuống đất
+        let hitTestSource = null;
+        let hitTestSourceRequested = false;
+
+        // Game Objects
+        let mazeGroup, player, keyItem, gate;
+        let gameStarted = false;
+        let hasKey = false;
+
+        // Trạng thái điều khiển
+        let moveForward = false;
+        let rotateLeft = false;
+        let rotateRight = false;
+
+        init();
+        animate();
+
+        function init() {
+            container = document.createElement('div');
+            document.body.appendChild(container);
+
+            scene = new THREE.Scene();
+
+            // Ánh sáng
+            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+            light.position.set(0.5, 1, 0.25);
+            scene.add(light);
+
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true; // Bật chế độ XR
+            container.appendChild(renderer.domElement);
+
+            // Thêm nút "START AR"
+            document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
+
+            // Xử lý chạm màn hình để đặt mê cung
+            controller = renderer.xr.getController(0);
+            controller.addEventListener('select', onSelect);
+            scene.add(controller);
+
+            // Vòng tròn ngắm (Reticle)
+            reticle = new THREE.Mesh(
+                new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2),
+                new THREE.MeshBasicMaterial()
+            );
+            reticle.matrixAutoUpdate = false;
+            reticle.visible = false;
+            scene.add(reticle);
+
+            setupUI();
+        }
+
+        // Khi người chơi chạm vào màn hình lần đầu
+        function onSelect() {
+            if (reticle.visible && !gameStarted) {
+                spawnGame(reticle.matrix);
+            }
+        }
+
+        // Hàm tạo game tại vị trí ngắm
+        function spawnGame(matrix) {
+            gameStarted = true;
+            reticle.visible = false; // Ẩn vòng ngắm đi
+            document.getElementById('instructions').innerText = "Hãy tìm Chìa khóa (Màu Vàng) để mở Cổng (Màu Xanh)!";
+            document.getElementById('overlay').style.display = 'block'; // Hiện nút điều khiển
+
+            // 1. Tạo Mê cung (Đại diện bằng cái hộp màu xám)
+            mazeGroup = new THREE.Group();
+            mazeGroup.position.setFromMatrixPosition(matrix); // Đặt tại vị trí ngắm
+            scene.add(mazeGroup);
+
+            // Sàn mê cung
+            const floor = new THREE.Mesh(new THREE.BoxGeometry(2, 0.1, 2), new THREE.MeshPhongMaterial({ color: 0x808080 }));
+            mazeGroup.add(floor);
+
+            // Tường (Ví dụ 1 bức tường)
+            const wall = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 0.1), new THREE.MeshPhongMaterial({ color: 0x555555 }));
+            wall.position.set(0, 0.25, -1);
+            mazeGroup.add(wall);
+
+            // 2. Tạo Key (Chìa khóa - Hình cầu vàng)
+            keyItem = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshPhongMaterial({ color: 0xFFFF00 }));
+            keyItem.position.set(0.5, 0.3, 0.5); // Vị trí so với tâm mê cung
+            mazeGroup.add(keyItem);
+
+            // 3. Tạo Cổng ra (Hình hộp xanh dương)
+            gate = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.8, 0.1), new THREE.MeshPhongMaterial({ color: 0x0000FF }));
+            gate.position.set(-0.5, 0.4, -0.8);
+            mazeGroup.add(gate);
+
+            // 4. Tạo Nhân vật "Nghêu" (Hình cầu đỏ)
+            // SAU NÀY BẠN SẼ THAY ĐOẠN NÀY BẰNG MODEL 3D
+            player = new THREE.Mesh(new THREE.SphereGeometry(0.08), new THREE.MeshPhongMaterial({ color: 0xFF0000 }));
+            player.position.set(0, 0.2, 0.8); // Điểm xuất phát
+            mazeGroup.add(player); // Add player vào group để nó đi theo mê cung
+        }
+
+        function setupUI() {
+            const btnGo = document.getElementById('btnGo');
+            const btnLeft = document.getElementById('btnLeft');
+            const btnRight = document.getElementById('btnRight');
+
+            // Xử lý sự kiện giữ nút
+            btnGo.addEventListener('touchstart', () => moveForward = true);
+            btnGo.addEventListener('touchend', () => moveForward = false);
+            
+            btnLeft.addEventListener('touchstart', () => rotateLeft = true);
+            btnLeft.addEventListener('touchend', () => rotateLeft = false);
+
+            btnRight.addEventListener('touchstart', () => rotateRight = true);
+            btnRight.addEventListener('touchend', () => rotateRight = false);
+        }
+
+        function updateGameLogic() {
+            if (!gameStarted || !player) return;
+
+            // 1. Di chuyển nhân vật
+            const speed = 0.02;
+            const rotSpeed = 0.05;
+
+            if (rotateLeft) player.rotation.y += rotSpeed;
+            if (rotateRight) player.rotation.y -= rotSpeed;
+            
+            if (moveForward) {
+                // Tính vector hướng tới phía trước của nhân vật
+                const direction = new THREE.Vector3();
+                player.getWorldDirection(direction);
+                // Lưu ý: Mặc định object nhìn về phía nào tùy thuộc model, ở đây giả sử trục Z
+                player.position.add(direction.multiplyScalar(speed));
+            }
+
+            // 2. Logic Va chạm & Thắng (Đơn giản hóa bằng khoảng cách)
+            
+            // Ăn Key
+            if (!hasKey && player.position.distanceTo(keyItem.position) < 0.2) {
+                hasKey = true;
+                keyItem.visible = false; // Ẩn chìa khóa
+                document.getElementById('instructions').innerText = "Đã có chìa khóa! Tìm cổng ra!";
+            }
+
+            // Ra cổng
+            if (hasKey && player.position.distanceTo(gate.position) < 0.3) {
+                document.getElementById('instructions').innerText = "CHIẾN THẮNG! BẠN ĐÃ ĐƯA NGHÊU VỀ ĐÍCH!";
+                gameStarted = false; // Dừng game
+            }
+        }
+
+        function animate() {
+            renderer.setAnimationLoop(render);
+        }
+
+        function render(timestamp, frame) {
+            if (frame) {
+                // Logic tìm mặt phẳng (Hit Test)
+                const referenceSpace = renderer.xr.getReferenceSpace();
+                const session = renderer.xr.getSession();
+
+                if (hitTestSourceRequested === false) {
+                    session.requestReferenceSpace('viewer').then(function (referenceSpace) {
+                        session.requestHitTestSource({ space: referenceSpace }).then(function (source) {
+                            hitTestSource = source;
+                        });
+                    });
+                    session.addEventListener('end', function () {
+                        hitTestSourceRequested = false;
+                        hitTestSource = null;
+                    });
+                    hitTestSourceRequested = true;
+                }
+
+                if (hitTestSource) {
+                    const hitTestResults = frame.getHitTestResults(hitTestSource);
+                    if (hitTestResults.length > 0) {
+                        const hit = hitTestResults[0];
+                        reticle.visible = true;
+                        reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
+                    } else {
+                        reticle.visible = false;
+                    }
+                }
+            }
+            
+            // Cập nhật logic game
+            updateGameLogic();
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
