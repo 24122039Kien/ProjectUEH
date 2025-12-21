@@ -1,11 +1,21 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <title>Nghêu Thần Thú - AR Maze</title>
+    <title>Nghêu Thần Thú - AR Debug</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; }
+        
+        /* Hộp hiển thị lỗi (Quan trọng) */
+        #error-console {
+            position: absolute; top: 0; left: 0; width: 100%; height: 150px;
+            background: rgba(0,0,0,0.8); color: #ff5555; font-family: monospace;
+            font-size: 12px; overflow-y: scroll; z-index: 10000; padding: 10px;
+            pointer-events: none; border-bottom: 2px solid red;
+            display: none; /* Mặc định ẩn, có lỗi mới hiện */
+        }
+
         #overlay {
             position: absolute; bottom: 20px; left: 0; width: 100%;
             text-align: center; display: none; pointer-events: none; z-index: 999;
@@ -16,7 +26,7 @@
             font-weight: bold; color: #333; touch-action: manipulation;
         }
         #instructions {
-            position: absolute; top: 20px; width: 100%; text-align: center;
+            position: absolute; top: 160px; width: 100%; text-align: center;
             color: white; background: rgba(0,0,0,0.5); padding: 10px;
             font-size: 16px;
         }
@@ -24,22 +34,34 @@
 </head>
 <body>
 
-    <div id="instructions">Rà camera xuống sàn nhà để tìm mặt phẳng, sau đó chạm để đặt Mê Cung.</div>
+    <div id="error-console">Debugging Console Started...<br></div>
+
+    <div id="instructions">Đang tải AR... (Nếu lâu quá hãy kiểm tra mạng)</div>
     
     <div id="overlay">
-        <button class="btn" id="btnLeft">⬅️ Xoay</button>
-        <button class="btn" id="btnGo">Đi Thẳng ⬆️</button>
-        <button class="btn" id="btnRight">Xoay ➡️</button>
+        <button class="btn" id="btnLeft">⬅️</button>
+        <button class="btn" id="btnGo">Đi ⬆️</button>
+        <button class="btn" id="btnRight">➡️</button>
     </div>
 
+    <script>
+        window.onerror = function(message, source, lineno, colno, error) {
+            const consoleDiv = document.getElementById('error-console');
+            consoleDiv.style.display = 'block'; // Hiện hộp lỗi
+            consoleDiv.innerHTML += `[LỖI] ${message} (Dòng: ${lineno})<br>`;
+        };
+        console.error = function(message) {
+            const consoleDiv = document.getElementById('error-console');
+            consoleDiv.style.display = 'block';
+            consoleDiv.innerHTML += `[JS Error] ${message}<br>`;
+        }
+    </script>
+
     <script type="module">
-        // 1. IMPORT CÁC THƯ VIỆN CẦN THIẾT
         import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
         import { ARButton } from 'https://unpkg.com/three@0.160.0/examples/jsm/webxr/ARButton.js';
         import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 
-        // 2. CẤU HÌNH MÊ CUNG (Sửa map tại đây)
-        // 1: Tường | 0: Đường đi | 9: Cổng ra
         const mapDesign = [
             [1, 1, 1, 1, 1, 1, 1],
             [1, 0, 0, 0, 1, 0, 1],
@@ -50,20 +72,18 @@
             [1, 1, 1, 1, 1, 1, 1]
         ];
 
-        let container;
-        let camera, scene, renderer;
-        let controller;
-        let reticle;
-        let hitTestSource = null;
-        let hitTestSourceRequested = false;
-
+        let container, camera, scene, renderer, controller, reticle;
+        let hitTestSource = null, hitTestSourceRequested = false;
         let mazeGroup, player, keyItem, gate;
-        let gameStarted = false;
-        let hasKey = false;
+        let gameStarted = false, hasKey = false;
         let moveForward = false, rotateLeft = false, rotateRight = false;
 
-        init();
-        animate();
+        try {
+            init();
+            animate();
+        } catch (err) {
+            console.error("Lỗi khi khởi động: " + err.message);
+        }
 
         function init() {
             container = document.createElement('div');
@@ -71,7 +91,6 @@
 
             scene = new THREE.Scene();
 
-            // Ánh sáng môi trường & Đèn chiếu
             const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
             light.position.set(0.5, 1, 0.25);
             scene.add(light);
@@ -87,7 +106,10 @@
             renderer.xr.enabled = true;
             container.appendChild(renderer.domElement);
 
-            document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
+            // TẠO NÚT AR
+            const button = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] });
+            document.body.appendChild(button);
+            document.getElementById('instructions').innerText = "Rà camera xuống sàn nhà để tìm mặt phẳng!";
 
             controller = renderer.xr.getController(0);
             controller.addEventListener('select', onSelect);
@@ -110,193 +132,139 @@
             }
         }
 
-        // HÀM TẠO GAME (Đã nâng cấp)
         function spawnGame(matrix) {
             gameStarted = true;
             reticle.visible = false;
-            document.getElementById('instructions').innerText = "Điều khiển Nghêu theo MŨI TÊN để tìm CHÌA KHÓA!";
+            document.getElementById('instructions').innerText = "Tìm chìa khóa vàng!";
             document.getElementById('overlay').style.display = 'block';
 
             mazeGroup = new THREE.Group();
             mazeGroup.position.setFromMatrixPosition(matrix);
-            // Thu nhỏ game còn 30% để vừa sàn nhà
-            mazeGroup.scale.set(0.3, 0.3, 0.3);
+            mazeGroup.scale.set(0.3, 0.3, 0.3); // Thu nhỏ
             scene.add(mazeGroup);
 
+            // Xây dựng map
             const unitSize = 0.5;
             const wallGeo = new THREE.BoxGeometry(unitSize, 0.4, unitSize);
             const wallMat = new THREE.MeshPhongMaterial({ color: 0x8B4513 }); 
 
-            // Tạo sàn
+            // Floor
             const width = mapDesign[0].length * unitSize;
             const height = mapDesign.length * unitSize;
             const floor = new THREE.Mesh(
                 new THREE.BoxGeometry(width, 0.05, height),
                 new THREE.MeshPhongMaterial({ color: 0xcccccc })
             );
-            floor.position.set((width/2) - (unitSize/2), -0.05, (height/2) - (unitSize/2));
+            floor.position.set((width/2)-(unitSize/2), -0.05, (height/2)-(unitSize/2));
             mazeGroup.add(floor);
 
-            // Xây tường từ mảng mapDesign
             for (let row = 0; row < mapDesign.length; row++) {
                 for (let col = 0; col < mapDesign[row].length; col++) {
                     const type = mapDesign[row][col];
                     const x = col * unitSize;
                     const z = row * unitSize;
-
-                    if (type === 1) { // Tường
+                    if (type === 1) {
                         const wall = new THREE.Mesh(wallGeo, wallMat);
                         wall.position.set(x, 0.2, z);
                         mazeGroup.add(wall);
-                    } else if (type === 9) { // Cổng
-                        gate = new THREE.Mesh(
-                            new THREE.BoxGeometry(unitSize, 0.6, 0.1),
-                            new THREE.MeshPhongMaterial({ color: 0x0000FF, transparent: true, opacity: 0.7 })
-                        );
+                    } else if (type === 9) {
+                        gate = new THREE.Mesh(new THREE.BoxGeometry(unitSize, 0.6, 0.1), new THREE.MeshPhongMaterial({ color: 0x0000FF, opacity: 0.7, transparent: true }));
                         gate.position.set(x, 0.3, z);
                         mazeGroup.add(gate);
                     }
                 }
             }
 
-            // Tạo Key + Marker xoay
+            // Key
             keyItem = new THREE.Group();
-            // Đặt key ở tọa độ (1,1)
-            keyItem.position.set(1 * unitSize, 0.1, 1 * unitSize); 
-            
-            const keyMesh = new THREE.Mesh(new THREE.SphereGeometry(0.08), new THREE.MeshPhongMaterial({ color: 0xFFFF00 }));
-            keyItem.add(keyMesh);
-            
-            const keyMarker = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.1, 8), new THREE.MeshBasicMaterial({ color: 0xFFFF00 }));
-            keyMarker.position.y = 0.3; 
-            keyMarker.rotation.z = Math.PI; 
-            keyItem.add(keyMarker);
-            
+            keyItem.position.set(1 * unitSize, 0.1, 1 * unitSize);
+            keyItem.add(new THREE.Mesh(new THREE.SphereGeometry(0.08), new THREE.MeshPhongMaterial({ color: 0xFFFF00 })));
+            const marker = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.1, 8), new THREE.MeshBasicMaterial({ color: 0xFFFF00 }));
+            marker.position.y = 0.3; marker.rotation.z = Math.PI;
+            keyItem.add(marker);
             mazeGroup.add(keyItem);
 
-            // Tạo Player + Mũi tên
-            const startX = 1 * unitSize;
-            const startZ = 5 * unitSize; // Vị trí xuất phát
-
+            // Player
             const loader = new GLTFLoader();
-            loader.load('./ngheu.glb', function (gltf) {
+            loader.load('./ngheu.glb', (gltf) => {
                 player = gltf.scene;
                 player.scale.set(0.05, 0.05, 0.05);
-                player.position.set(startX, 0.05, startZ);
+                player.position.set(1 * unitSize, 0.05, 5 * unitSize);
                 
-                // Thêm mũi tên chỉ hướng
+                // Mũi tên
                 const arrowGroup = new THREE.Group();
-                const arrowShaft = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 2), new THREE.MeshBasicMaterial({ color: 0x00FF00 }));
-                arrowShaft.scale.set(0.1, 0.05, 0.3);
-                arrowShaft.position.z = -0.5; 
-                
-                const arrowHead = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.2, 8), new THREE.MeshBasicMaterial({ color: 0x00FF00 }));
-                arrowHead.rotation.x = -Math.PI / 2;
-                arrowHead.position.z = -0.8;
-
-                arrowGroup.add(arrowShaft);
-                arrowGroup.add(arrowHead);
-                arrowGroup.position.y = 2.0; // Cao lên trên đầu con Nghêu
-                
+                const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 2), new THREE.MeshBasicMaterial({ color: 0x00FF00 }));
+                shaft.scale.set(0.1, 0.05, 0.3); shaft.position.z = -0.5;
+                const head = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.2, 8), new THREE.MeshBasicMaterial({ color: 0x00FF00 }));
+                head.rotation.x = -Math.PI / 2; head.position.z = -0.8;
+                arrowGroup.add(shaft, head);
+                arrowGroup.position.y = 2.0;
                 player.add(arrowGroup);
+
                 mazeGroup.add(player);
-                console.log("Đã tải xong Nghêu!");
-            }, undefined, function(error) {
-                console.error("Lỗi tải model:", error);
-                // Fallback: Nếu lỗi thì dùng hộp đỏ
-                player = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.1), new THREE.MeshStandardMaterial({color: 0xff0000}));
-                player.position.set(startX, 0.1, startZ);
-                // Vẫn gắn mũi tên vào hộp đỏ
-                const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,0,0), 0.5, 0x00FF00);
-                arrowHelper.position.y = 0.2;
-                player.add(arrowHelper);
+            }, undefined, (e) => {
+                console.error("Lỗi tải model: " + e);
+                // Fallback
+                player = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.1), new THREE.MeshStandardMaterial({color:0xff0000}));
+                player.position.set(1 * unitSize, 0.1, 5 * unitSize);
+                const arrow = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,0,0), 0.5, 0x00FF00);
+                arrow.position.y = 0.2; player.add(arrow);
                 mazeGroup.add(player);
             });
         }
 
         function setupUI() {
-            const btnGo = document.getElementById('btnGo');
-            const btnLeft = document.getElementById('btnLeft');
-            const btnRight = document.getElementById('btnRight');
-
-            btnGo.addEventListener('touchstart', (e) => { e.preventDefault(); moveForward = true; });
-            btnGo.addEventListener('touchend', (e) => { e.preventDefault(); moveForward = false; });
-            
-            btnLeft.addEventListener('touchstart', (e) => { e.preventDefault(); rotateLeft = true; });
-            btnLeft.addEventListener('touchend', (e) => { e.preventDefault(); rotateLeft = false; });
-
-            btnRight.addEventListener('touchstart', (e) => { e.preventDefault(); rotateRight = true; });
-            btnRight.addEventListener('touchend', (e) => { e.preventDefault(); rotateRight = false; });
+            document.getElementById('btnGo').addEventListener('touchstart', (e)=>{e.preventDefault(); moveForward=true;});
+            document.getElementById('btnGo').addEventListener('touchend', (e)=>{e.preventDefault(); moveForward=false;});
+            document.getElementById('btnLeft').addEventListener('touchstart', (e)=>{e.preventDefault(); rotateLeft=true;});
+            document.getElementById('btnLeft').addEventListener('touchend', (e)=>{e.preventDefault(); rotateLeft=false;});
+            document.getElementById('btnRight').addEventListener('touchstart', (e)=>{e.preventDefault(); rotateRight=true;});
+            document.getElementById('btnRight').addEventListener('touchend', (e)=>{e.preventDefault(); rotateRight=false;});
         }
 
         function updateGameLogic() {
-            // Animation cho Key Marker
             if (keyItem && keyItem.visible) {
                 keyItem.rotation.y += 0.05;
-                if(keyItem.children[1]) {
-                    keyItem.children[1].position.y = 0.3 + Math.sin(Date.now() * 0.005) * 0.05;
-                }
+                if(keyItem.children[1]) keyItem.children[1].position.y = 0.3 + Math.sin(Date.now()*0.005)*0.05;
             }
-
             if (!gameStarted || !player) return;
 
-            const speed = 0.02;
-            const rotSpeed = 0.05;
-
-            if (rotateLeft) player.rotation.y += rotSpeed;
-            if (rotateRight) player.rotation.y -= rotSpeed;
-            
+            if (rotateLeft) player.rotation.y += 0.05;
+            if (rotateRight) player.rotation.y -= 0.05;
             if (moveForward) {
-                const direction = new THREE.Vector3();
-                player.getWorldDirection(direction);
-                player.position.add(direction.multiplyScalar(speed));
+                const dir = new THREE.Vector3();
+                player.getWorldDirection(dir);
+                player.position.add(dir.multiplyScalar(0.02));
             }
-
-            // Logic va chạm Key
             if (!hasKey && player.position.distanceTo(keyItem.position) < 0.2) {
-                hasKey = true;
-                keyItem.visible = false;
-                document.getElementById('instructions').innerText = "ĐÃ CÓ CHÌA KHÓA! TÌM CỔNG XANH ĐỂ THOÁT!";
+                hasKey = true; keyItem.visible = false;
+                document.getElementById('instructions').innerText = "CÓ CHÌA KHÓA! TÌM CỔNG RA!";
             }
-
-            // Logic Win
             if (hasKey && player.position.distanceTo(gate.position) < 0.3) {
-                document.getElementById('instructions').innerText = "CHIẾN THẮNG! BẠN GIỎI QUÁ!";
+                document.getElementById('instructions').innerText = "THẮNG RỒI!";
                 gameStarted = false;
             }
         }
 
-        function animate() {
-            renderer.setAnimationLoop(render);
-        }
+        function animate() { renderer.setAnimationLoop(render); }
 
         function render(timestamp, frame) {
             if (frame) {
-                const referenceSpace = renderer.xr.getReferenceSpace();
                 const session = renderer.xr.getSession();
-
-                if (hitTestSourceRequested === false) {
-                    session.requestReferenceSpace('viewer').then(function (referenceSpace) {
-                        session.requestHitTestSource({ space: referenceSpace }).then(function (source) {
-                            hitTestSource = source;
-                        });
-                    });
-                    session.addEventListener('end', function () {
-                        hitTestSourceRequested = false;
-                        hitTestSource = null;
+                if (!hitTestSourceRequested) {
+                    session.requestReferenceSpace('viewer').then((refSpace) => {
+                        session.requestHitTestSource({ space: refSpace }).then((source) => hitTestSource = source);
                     });
                     hitTestSourceRequested = true;
                 }
-
                 if (hitTestSource) {
                     const hitTestResults = frame.getHitTestResults(hitTestSource);
                     if (hitTestResults.length > 0) {
                         const hit = hitTestResults[0];
+                        const refSpace = renderer.xr.getReferenceSpace();
                         reticle.visible = true;
-                        reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
-                    } else {
-                        reticle.visible = false;
-                    }
+                        reticle.matrix.fromArray(hit.getPose(refSpace).transform.matrix);
+                    } else reticle.visible = false;
                 }
             }
             updateGameLogic();
