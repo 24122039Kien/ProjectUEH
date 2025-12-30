@@ -8,11 +8,11 @@
 <style>
   body { margin:0; overflow:hidden; font-family:sans-serif; }
 
-  /* === Intro Screen === */
+  /* ===== INTRO SCREEN ===== */
   #introScreen {
     position: fixed;
     inset: 0;
-    background-image: url('Background.png'); /* Bạn thay ảnh nền intro tại đây */
+    background-image: url('Background.png'); /* <<< THAY ẢNH NỀN INTRO Ở ĐÂY */
     background-size: cover;
     background-position: center;
     display:flex;
@@ -23,7 +23,7 @@
   }
   #introScreen.hidden { display:none; }
 
-  /* === Rule slideshow === */
+  /* ===== RULE SLIDESHOW ===== */
   #ruleScreen {
     position: fixed;
     inset: 0;
@@ -42,7 +42,7 @@
     pointer-events:none;
   }
 
-  /* === Win Screen === */
+  /* ===== WIN SCREEN ===== */
   #winScreen {
     position: fixed;
     inset: 0;
@@ -61,7 +61,7 @@
     pointer-events:none;
   }
 
-  /* === Icon Buttons === */
+  /* ===== ICON BUTTONS ===== */
   .iconBtn {
     position: fixed;
     width:48px; height:48px;
@@ -75,19 +75,19 @@
 
   #volumeBtn {
     top:16px; right:16px;
-    background-image:url('Volume.png'); /* Thay icon loa bật */
+    background-image:url('Volume_on.png'); /* <<< THAY ICON LOA BẬT Ở ĐÂY */
   }
   #volumeBtn.dimmed {
-    background-image:url('Volume_off.png'); /* Thay icon loa tắt */
+    background-image:url('Volume_off.png'); /* <<< THAY ICON LOA TẮT Ở ĐÂY */
     opacity:0.4;
   }
 
   #helpBtn {
     bottom:16px; right:16px;
-    background-image:url('NutThang.png'); /* Thay icon help/luật chơi */
+    background-image:url('Help.png'); /* <<< THAY ICON LUẬT CHƠI Ở ĐÂY */
   }
 
-  /* Timer */
+  /* ===== TIMER UI ===== */
   #timer {
     position:fixed; top:16px; left:16px;
     font-size:20px; background:rgba(0,0,0,0.5);
@@ -99,35 +99,39 @@
 
 <body>
 
+<!-- ===== INTRO OVERLAY ===== -->
 <div id="introScreen">
-  <img src="INTRO_LOGO_OR_TITLE_IMAGE_HERE" style="width:260px;margin-bottom:20px"/> <!-- Có thể thay bằng logo bạn vẽ -->
+  <img src="IntroTitle.png" style="width:260px;margin-bottom:20px"/> <!-- <<< THAY LOGO/TITLE Ở ĐÂY -->
   <button id="startBtn">Bắt đầu AR</button>
 </div>
 
+<!-- ===== BUTTONS ===== -->
 <button id="volumeBtn" class="iconBtn"></button>
 <button id="helpBtn" class="iconBtn"></button>
 
+<!-- ===== RULE SLIDESHOW OVERLAY ===== -->
 <div id="ruleScreen" class="hidden">
-  <img id="ruleImage" src="RULE_SLIDE_1_HERE"/>
+  <img id="ruleImage" src="LoiNgo.png"/> <!-- Slide ảnh luật chơi sẽ đổi src bằng JS -->
 </div>
 
+<!-- ===== WIN OVERLAY ===== -->
 <div id="winScreen" class="hidden">
-  <img src="Win.png"/> <!-- Thay ảnh overlay thắng trận -->
+  <img src="Win.png"/> <!-- <<< THAY ẢNH OVERLAY THẮNG Ở ĐÂY -->
 </div>
 
 <div id="timer">0.0s</div>
 
 <script type="module">
-import * as THREE from 'three';
-import { ARButton } from 'webxr/ARButton.js';
-import { GLTFLoader } from 'loaders/GLTFLoader.js';
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+import { ARButton } from 'https://unpkg.com/three@0.160.0/examples/jsm/webxr/ARButton.js';
+import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 
-/* === CONFIG === */
-const SCALE_MAZE = 0.24; // Nhỏ hơn 40% maze cũ
+/* ===== GAME CONFIG ===== */
+const SCALE_MAZE = 0.4;  // Maze scale 40%
 const ROWS = 15;
 const COLS = 15;
 
-/* === Generate Maze DFS Backtracking === */
+/* ===== MAZE GENERATION (DFS Backtracking) ===== */
 let maze = Array.from({length:ROWS},()=>Array(COLS).fill(1));
 const dirs = [[0,2],[2,0],[0,-2],[-2,0]];
 function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} }
@@ -145,7 +149,7 @@ function carve(r=1,c=1){
 }
 carve();
 
-/* === Setup AR Scene === */
+/* ===== SETUP AR SCENE ===== */
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.01,50);
 const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
@@ -157,7 +161,7 @@ document.body.appendChild(ARButton.createButton(renderer,{requiredFeatures:['hit
 const light=new THREE.HemisphereLight(1,1,1);
 scene.add(light);
 
-/* === Build Maze Walls === */
+/* ===== BUILD MAZE WALLS ===== */
 const mazeGroup=new THREE.Group();
 scene.add(mazeGroup);
 const tileSize=0.25 * SCALE_MAZE;
@@ -177,11 +181,11 @@ for(let r=0;r<ROWS;r++){
   }
 }
 
-/* === Spawn Orbs (bi vàng) === */
+/* ===== SPAWN COLLECTIBLE ORBS ===== */
 let orbs=[], collected=0;
-const totalOrbs=20;
 const orbGeo=new THREE.SphereGeometry(0.02,12,12);
 const orbMat=new THREE.MeshStandardMaterial({metalness:0.3,roughness:0.5});
+const totalOrbs=20;
 
 while(orbs.length<totalOrbs){
   const r=Math.floor(Math.random()*ROWS), c=Math.floor(Math.random()*COLS);
@@ -193,10 +197,10 @@ while(orbs.length<totalOrbs){
   }
 }
 
-/* === Load Player GLB === */
+/* ===== LOAD PLAYER MODEL ===== */
 const loader=new GLTFLoader();
 let player;
-loader.load("model.glb", gltf => {  /* Bạn thay model nhân vật tại đây */
+loader.load("model.glb", gltf => {  /* <<< THAY MODEL .GLB NHÂN VẬT TẠI FILE MODEL.GLB TRONG CÙNG THƯ MỤC */
   player = gltf.scene;
   player.scale.set(0.12,0.12,0.12);
   scene.add(player);
@@ -204,7 +208,7 @@ loader.load("model.glb", gltf => {  /* Bạn thay model nhân vật tại đây 
   addArrow();
 });
 
-/* === Arrow chỉ hướng di chuyển === */
+/* ===== DIRECTION ARROW (OPTIONAL INDICATOR) ===== */
 let arrow;
 function addArrow(){
   const geo=new THREE.ConeGeometry(0.02,0.06,8).rotateX(Math.PI/2);
@@ -214,19 +218,22 @@ function addArrow(){
 function updateArrow(){
   if(!player||!arrow)return;
   arrow.position.set(player.position.x,0.12,player.position.z+0.05);
-  arrow.rotation.z=Math.atan2(dir[0],dir[1]); // Không ngược hướng nữa
+  arrow.rotation.z=Math.atan2(dir[0],dir[1]);
 }
 
-/* === Movement Tile-to-Tile === */
+/* ===== PAC-MAN STYLE TILE MOVEMENT ===== */
 let dir=[0,1], pendingDir=null;
 let currentTile=[1,1];
+
 function snapToTile(r,c){
   if(!player)return;
   player.position.x=(c-COLS/2)*tileSize;
   player.position.z=(r-ROWS/2)*tileSize;
   player.rotation.y = Math.atan2(dir[0], dir[1]);
 }
+
 function isFree(r,c){ return maze[r]?.[c]===0; }
+
 function updateMove(dt){
   if(!player) return;
   if(pendingDir){
@@ -237,6 +244,7 @@ function updateMove(dt){
   const nr=currentTile[0]+dir[0], nc=currentTile[1]+dir[1];
   if(isFree(nr,nc)){ currentTile=[nr,nc]; snapToTile(nr,nc); checkOrb(); }
 }
+
 function checkOrb(){
   for(const o of orbs){
     if(o.r===currentTile[0] && o.c===currentTile[1] && o.mesh.visible){
@@ -247,43 +255,51 @@ function checkOrb(){
   }
 }
 
-/* === Win logic === */
+/* ===== WIN GAME ===== */
 function winGame(){
   showWin();
   gameRunning=false;
 }
+
 const winScreen=document.getElementById("winScreen");
 function showWin(){ winScreen.classList.remove("hidden"); }
-winScreen.addEventListener("click",()=>{ winScreen.classList.add("hidden"); });
+winScreen.addEventListener("click",()=>{ winScreen.classList.add("hidden"); document.getElementById("introScreen").classList.remove("hidden"); });
 
-/* === Rule slideshow logic === */
+/* ===== RULE SLIDESHOW ===== */
 const ruleScreen=document.getElementById("ruleScreen");
 const ruleImage=document.getElementById("ruleImage");
-const ruleSlides=["LoiNgo.png","LuatChoi.png"]; /* Thay 2 slide luật chơi */
+const ruleSlides=["LoiNgo.png","LuatChoi.png"]; /* <<< THAY 2 ẢNH SLIDESHOW Ở ĐÂY */
+
 let ruleIndex=0;
 ruleScreen.addEventListener("click",()=>{
   ruleIndex++;
   if(ruleIndex<ruleSlides.length) ruleImage.src=ruleSlides[ruleIndex];
   else ruleScreen.classList.add("hidden");
 });
-function showRules(){ ruleIndex=0; ruleScreen.classList.remove("hidden"); ruleImage.src=ruleSlides[0]; }
+
+function showRules(){ ruleIndex=0; ruleScreen.classList.remove("hidden"); ruleImage.src=ruleSlides[0]; gameRunning=false; }
 document.getElementById("helpBtn").addEventListener("click",showRules);
 
-/* === Music toggle === */
-const bgMusic=new Audio("Audio.mp3"); /* Thay nhạc nền */
-bgMusic.loop=true; bgMusic.volume=0.5; bgMusic.play();
+/* ===== MUSIC TOGGLE ===== */
+const bgMusic = new Audio("background.mp3"); /* <<< THAY NHẠC NỀN .MP3 Ở ĐÂY, FILE MP3 ĐỂ TRONG CÙNG THƯ MỤC */
+bgMusic.loop = true;
+bgMusic.volume = 0.5;
 const volumeBtn=document.getElementById("volumeBtn");
 volumeBtn.addEventListener("click",()=>{ bgMusic.muted=!bgMusic.muted; volumeBtn.classList.toggle("dimmed"); });
 
-/* === Timer UI === */
-let gameRunning=false, start=0;
-document.getElementById("startBtn").onclick=()=>{ gameRunning=true; start=performance.now(); };
+/* ===== TIMER ===== */
+let gameRunning=false, start=0, elapsed=0, last=performance.now();
+document.getElementById("startBtn").onclick=()=>{ document.getElementById("introScreen").classList.add("hidden"); gameRunning=true; start=performance.now(); bgMusic.play(); };
+
 function render(){
   const now=performance.now();
+  const dt=(now-last)/1000;
+  last=now;
+
   if(gameRunning){
     elapsed=(now-start);
     document.getElementById("timer").innerText=(elapsed/1000).toFixed(1)+"s";
-    updateMove();
+    updateMove(dt);
     updateArrow();
   }
   renderer.render(scene,camera);
@@ -293,3 +309,5 @@ renderer.setAnimationLoop(render);
 
 </body>
 </html>
+
+# v1.0.0
