@@ -5,60 +5,63 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>WebAR Maze - Pacman Style</title>
 
+<!-- Tối ưu tải hình nền intro -->
+<link rel="preload" as="image" href="Background.png">
+
 <style>
   body { margin:0; overflow:hidden; font-family:sans-serif; }
 
-  /* ===== INTRO SCREEN ===== */
+  /* ===== MÀN HÌNH INTRO ===== */
   #introScreen {
     position: fixed;
     inset: 0;
-    background-image: url('Background.png'); /* <<< THAY ẢNH NỀN INTRO Ở ĐÂY */
+    background-image: url('Background.png'); /* <<< Bạn thay hình nền intro ở đây */
     background-size: cover;
     background-position: center;
     display:flex;
     justify-content:center;
     align-items:center;
     flex-direction:column;
-    z-index: 10;
+    z-index: 10000;
   }
   #introScreen.hidden { display:none; }
 
   #startARBtn {
-    padding:14px 32px;
-    font-size:20px;
-    border-radius:10px;
+    padding:16px 40px;
+    font-size:22px;
+    border-radius:12px;
     border:none;
     cursor:pointer;
     background:white;
   }
 
-  /* ===== ICON BUTTONS ===== */
+  /* ===== NÚT ICON GÓC MÀN HÌNH ===== */
   .iconBtn {
     position: fixed;
-    width:70px; height:70px; /* kích thước nút to hơn */
+    width:64px; height:64px; /* Nút to hơn */
     border:none; background:none;
-    background-size:65%;
+    background-size:70%;
     background-repeat:no-repeat;
     background-position:center;
     cursor:pointer;
-    z-index: 200; /* luôn nổi lên trên intro */
+    z-index:10001;
   }
 
   #volumeBtn {
     top:16px; right:16px;
-    background-image:url('Volume_on.png'); /* <<< THAY ICON LOA BẬT Ở ĐÂY */
+    background-image:url('Volume_on.png'); /* <<< Bạn thay icon loa bật ở đây */
   }
   #volumeBtn.dimmed {
-    background-image:url('Volume_off.png'); /* <<< THAY ICON LOA TẮT Ở ĐÂY */
-    opacity:0.4;
+    background-image:url('Volume_off.png'); /* <<< Bạn thay icon loa tắt ở đây */
+    opacity:0.5;
   }
 
   #helpBtn {
     bottom:16px; right:16px;
-    background-image:url('Help.png'); /* <<< THAY ICON HELP Ở ĐÂY */
+    background-image:url('Help.png'); /* <<< Bạn thay icon help ở đây */
   }
 
-  /* ===== RULE SLIDESHOW ===== */
+  /* ===== SLIDESHOW LUẬT CHƠI ===== */
   #ruleScreen {
     position: fixed;
     inset: 0;
@@ -66,17 +69,18 @@
     display:flex;
     justify-content:center;
     align-items:center;
-    z-index: 500;
+    z-index: 10002;
   }
   #ruleScreen.hidden { display:none; }
   #ruleScreen img {
-    width:100vw; height:100vh;
-    object-fit:contain;
-    background:rgba(0,0,0,0.7);
+    width:90vw;
+    height:90vh;
+    object-fit: contain;
+    background:rgba(0,0,0,0.6); /* Làm tối nền phía sau */
     pointer-events:none;
   }
 
-  /* ===== WIN SCREEN ===== */
+  /* ===== MÀN HÌNH THẮNG ===== */
   #winScreen {
     position: fixed;
     inset: 0;
@@ -84,25 +88,39 @@
     display:flex;
     justify-content:center;
     align-items:center;
-    z-index: 600;
+    z-index: 10001;
   }
   #winScreen.hidden { display:none; }
   #winScreen img {
-    width:100vw; height:100vh;
-    object-fit:contain;
-    background:rgba(0,0,0,0.6);
+    width:80vw;
+    height:80vh;
+    object-fit: contain;
+    background:rgba(0,0,0,0.5);
     pointer-events:none;
   }
+  #resetBtn {
+    margin-top:20px;
+    padding:14px 32px;
+    font-size:20px;
+    border:none;
+    border-radius:10px;
+    background:white;
+    cursor:pointer;
+  }
 
-  /* ===== TIMER ===== */
-  #timer {
-    position:fixed; top:16px; left:16px;
-    font-size:22px;
-    background:rgba(0,0,0,0.5);
-    color:white;
-    padding:6px 12px;
+  /* ===== DEBUG OVERLAY ===== */
+  #debug {
+    position:fixed;
+    top:10px; left:50%;
+    transform:translateX(-50%);
+    background:rgba(255,255,255,0.8);
+    color:black;
+    font-size:14px;
+    padding:6px 10px;
     border-radius:6px;
-    z-index:300;
+    z-index:20000;
+    max-width:90vw;
+    word-wrap:break-word;
   }
 </style>
 </head>
@@ -117,218 +135,253 @@
 <button id="helpBtn" class="iconBtn"></button>
 
 <div id="ruleScreen" class="hidden">
-  <img id="ruleImage" src="LoiNgo.png"/> <!-- <<< THAY 2 SLIDE Ở DƯỚI TRONG JS -->
+  <img id="ruleImage" src="LoiNgo.png"/> <!-- <<< Thay slide lời ngỏ của bạn ở đây -->
 </div>
 
 <div id="winScreen" class="hidden">
-  <img src="Win.png"/> <!-- <<< THAY ẢNH OVERLAY THẮNG Ở ĐÂY -->
+  <img src="Win.png"/> <!-- <<< Thay ảnh overlay thắng trận của bạn ở đây -->
+  <button id="resetBtn">Chơi lại</button>
 </div>
 
 <div id="timer">0.0s</div>
+<div id="debug">DEBUG: waiting...</div>
 
 <script type="module">
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-import { ARButton } from 'https://unpkg.com/three@0.160.0/examples/jsm/webxr/ARButton.js';
 import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 
-/* ====== CONFIG ====== */
-const SCALE = 0.25; // maze nhỏ hơn ~40% so với ban đầu
-const ROWS = 15;
-const COLS = 15;
-
-/* ====== MAZE GENERATION ====== */
-let grid = Array.from({length:ROWS},()=>Array(COLS).fill(1));
-const dirs = [[0,2],[2,0],[0,-2],[-2,0]];
-function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} }
-
-function carve(r=1,c=1){
-  grid[r][c] = 0;
-  const d=[...dirs]; shuffle(d);
-  for(const [dr,dc] of d){
-    const nr=r+dr, nc=c+dc, br=r+dr/2, bc=c+dc/2;
-    if(nr>0&&nc>0&&nr<ROWS-1&&nc<COLS-1&&grid[nr][nc]===1){
-      grid[br][bc]=0;
-      carve(nr,nc);
-    }
-  }
-}
-carve();
-
-// thêm loop để maze phức tạp hơn, ít cụt hơn
-for(let i=0;i<35;i++){
-  const r=Math.floor(Math.random()*(ROWS-2))+1;
-  const c=Math.floor(Math.random()*(COLS-2))+1;
-  grid[r][c]=0;
-}
-
-/* ====== INTRO UI LOGIC ====== */
+/* ===== UI ELEMENTS ===== */
 const introScreen = document.getElementById("introScreen");
-const ruleScreen  = document.getElementById("ruleScreen");
-const ruleImage   = document.getElementById("ruleImage");
-const winScreen   = document.getElementById("winScreen");
+const ruleScreen = document.getElementById("ruleScreen");
+const ruleImage = document.getElementById("ruleImage");
+const winScreen = document.getElementById("winScreen");
+const debugUI = document.getElementById("debug");
 
-// Nhạc nền chỉ chạy sau khi chạm Start (iOS an toàn)
-const bgMusic = new Audio("Audio.mp3"); /* <<< THAY FILE NHẠC Ở ĐÂY (.mp3 OK) */
+/* ===== RULE SLIDES ===== */
+const ruleSlides = ["LoiNgo.png", "LuatChoi.png"]; // <<< Bạn thay 2 file slide luật chơi của bạn tại đây
+let ruleIndex = 0;
+
+/* ===== BACKGROUND MUSIC ===== */
+const bgMusic = new Audio("background.mp3"); // <<< Bạn thay file nhạc nền .mp3 của bạn ở đây
 bgMusic.loop = true;
 bgMusic.volume = 0.5;
+bgMusic.muted = false;
 
-// Toggle Volume
-document.getElementById("volumeBtn").addEventListener("touchstart",()=>{
+/* Toggle volume */
+const volumeBtn = document.getElementById("volumeBtn");
+volumeBtn.addEventListener("touchstart", () => {
   bgMusic.muted = !bgMusic.muted;
-  document.getElementById("volumeBtn").classList.toggle("dimmed");
+  volumeBtn.classList.toggle("dimmed");
+  log("Toggled volume: " + (bgMusic.muted ? "OFF" : "ON"));
 });
 
-// Slideshow Rule (2 slide bạn tự thay asset)
-const ruleSlides = ["LoiNgo.png","LuatChoi.png"]; /* <<< THAY 2 ẢNH Ở ĐÂY */
-let ruleIndex = 0;
-document.getElementById("helpBtn").addEventListener("touchstart",()=>{
-  ruleIndex=0;
-  ruleImage.src = ruleSlides[0];
+/* Open rule slideshow */
+document.getElementById("helpBtn").addEventListener("touchstart", () => {
+  ruleIndex = 0;
   ruleScreen.classList.remove("hidden");
+  ruleImage.src = ruleSlides[ruleIndex];
   introScreen.classList.add("hidden");
+  log("Opened rule screen");
 });
-ruleScreen.addEventListener("touchstart",()=>{
+
+/* Next slide on any touch */
+ruleScreen.addEventListener("touchstart", () => {
   ruleIndex++;
-  if(ruleIndex < ruleSlides.length){
+  if (ruleIndex < ruleSlides.length) {
     ruleImage.src = ruleSlides[ruleIndex];
+    log("Slide → " + ruleSlides[ruleIndex]);
   } else {
     ruleScreen.classList.add("hidden");
     introScreen.classList.remove("hidden");
+    log("Exited rule slideshow");
   }
 });
 
-// Nhấn Start AR → ẩn intro + bật nhạc + init AR game
-document.getElementById("startARBtn").addEventListener("touchstart",()=>{
-  introScreen.classList.add("hidden");
-  bgMusic.play();
-  initARGame();
+/* ===== AR GAME LOGIC ===== */
+let renderer, scene, camera, player;
+let collected = 0;
+let orbs = [];
+let grid, ROWS = 15, COLS = 15;
+let tileSize = 0.25 * 0.4; // 40% scale mặc định
+let currentTile = [1,1];
+let dir = [0,1];
+let pendingDir = null;
+let gameRunning = false;
+let startTime = 0;
+
+/* Debug logger */
+function log(msg){
+  console.log(msg);
+  debugUI.innerText = "DEBUG: " + msg;
+}
+
+/* Start AR */
+document.getElementById("startARBtn").addEventListener("touchstart", async () => {
+  log("User tapped Start AR");
+  await startARSession();
 });
 
-/* ====== AR GAME INIT ====== */
-function initARGame(){
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.01,50);
-  const renderer = new THREE.WebGLRenderer({antialias:true,alpha:true});
+async function startARSession(){
+  if(!navigator.xr){ log("No WebXR"); return; }
+
+  try{
+    const session = await navigator.xr.requestSession('immersive-ar', {
+      requiredFeatures:['hit-test']
+    });
+    setupThree(session);
+    introScreen.classList.add("hidden");
+    bgMusic.play();
+    log("AR Session started");
+    gameRunning = true;
+    gameRunning = true;
+    gameRunning = true;
+    startTime = performance.now();
+  }catch(err){
+    log("AR Session failed: " + err);
+    alert("Không hỗ trợ AR immersive!");
+  }
+}
+
+function setupThree(session){
+  renderer = new THREE.WebGLRenderer({antialias:true,alpha:true});
   renderer.setSize(innerWidth,innerHeight);
   renderer.xr.enabled = true;
+  renderer.xr.setSession(session);
   document.body.appendChild(renderer.domElement);
-  document.body.appendChild(ARButton.createButton(renderer,{requiredFeatures:['hit-test']}));
+
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.01, 50);
   scene.add(new THREE.HemisphereLight(1,1,1));
 
-  const mazeGroup = new THREE.Group();
-  scene.add(mazeGroup);
-  const tileSize = 0.22 * SCALE;
-  const wallThickness = 0.025;
-  const wallHeight = 0.10;
+  generateMaze();
+  spawnOrbs();
+  loadPlayer();
 
-  const walls=[];
-  for(let r=0;r<ROWS;r++){
-    for(let c=0;c<COLS;c++){
-      if(grid[r][c]===1){
-        const w=new THREE.Mesh(new THREE.BoxGeometry(wallThickness,wallHeight,tileSize),new THREE.MeshStandardMaterial());
-        w.position.set((c-COLS/2)*tileSize,wallHeight/2,(r-ROWS/2)*tileSize);
-        mazeGroup.add(w);
-        walls.push({r,c});
+  renderer.setAnimationLoop(renderLoop);
+}
+
+/* Generate more complex maze */
+function generateMaze(){
+  grid = Array.from({length:ROWS},()=>Array(COLS).fill(1));
+  const dirs = [[0,2],[2,0],[0,-2],[-2,0]];
+  const shuffle = a=>a.sort(()=>Math.random()-0.5);
+  const carve=(r=1,c=1)=>{
+    grid[r][c]=0;
+    for(const[dr,dc]of shuffle([...dirs])){
+      const nr=r+dr,nc=c+dc,br=r+dr/2,bc=c+dc/2;
+      if(nr>0&&nc>0&&nr<ROWS-1&&nc<COLS-1&&grid[nr][nc]===1){
+        grid[br][bc]=0; carve(nr,nc);
       }
     }
+  };
+  carve();
+  for(let i=0;i<40;i++){
+    const r=Math.floor(Math.random()*(ROWS-2))+1;
+    const c=Math.floor(Math.random()*(COLS-2))+1;
+    if(grid[r][c]===1) grid[r][c]=0;
   }
+  log("Maze generated");
+}
 
-  /* ---- SPAWN ORBS (bi vàng) ---- */
-  let orbs=[], collected=0;
-  const orbGeo=new THREE.SphereGeometry(0.012,10,10);
-  const orbMat=new THREE.MeshStandardMaterial();
-  for(let i=0;i<30;i++){ // nhiều orb hơn
+/* Spawn collectible orbs */
+function spawnOrbs(){
+  orbs.forEach(o=>scene.remove(o.mesh));
+  orbs=[];
+  collected=0;
+  for(let i=0;i<20;i++){
     let r,c;
-    do{ r=Math.floor(Math.random()*ROWS); c=Math.floor(Math.random()*COLS);}while(grid[r][c]!==0);
-    const orb=new THREE.Mesh(orbGeo,orbMat);
-    orb.position.set((c-COLS/2)*tileSize,0.02,(r-ROWS/2)*tileSize);
+    do{
+      r=Math.floor(Math.random()*ROWS);
+      c=Math.floor(Math.random()*COLS);
+    }while(grid[r][c]!==0);
+    const orb=new THREE.Mesh(new THREE.SphereGeometry(0.02,12,12),new THREE.MeshStandardMaterial());
+    orb.position.set((c-COLS/2)*tileSize,0.04,(r-ROWS/2)*tileSize);
     scene.add(orb);
     orbs.push({mesh:orb,r,c});
   }
+  log("Orbs spawned");
+}
 
-  /* ---- LOAD PLAYER MODEL GLB ---- */
+/* Load player model */
+function loadPlayer(){
   const loader=new GLTFLoader();
-  let player, currentTile=[1,1], dir=[0,1], pendingDir=null;
-  loader.load("model.glb", gltf=>{ /* <<< THAY MODEL NHÂN VẬT Ở ĐÂY */
+  loader.load("model.glb",gltf=>{ /* <<< Bạn thay model.glb nhân vật ở đây */
     player=gltf.scene;
-    player.scale.set(0.07,0.07,0.07);
+    player.scale.set(0.08,0.08,0.08);
     scene.add(player);
-    snapTo(1,1);
-    addArrow();
-  });
+    snapTo(currentTile[0],currentTile[1]);
+    log("Player loaded");
+  },undefined,err=>log("Player load error: "+err));
+}
 
-  /* ---- ARROW DIRECTION INDICATOR ---- */
-  let arrow;
-  function addArrow(){
-    const geo=new THREE.ConeGeometry(0.01,0.04,8).rotateX(Math.PI/2);
-    arrow=new THREE.Mesh(geo,new THREE.MeshStandardMaterial());
-    scene.add(arrow);
-  }
-  function updateArrow(){
-    if(!player||!arrow)return;
-    arrow.position.set(player.position.x,0.06,player.position.z-0.03);
-    arrow.rotation.z=Math.atan2(-dir[0],-dir[1]);
-  }
+/* Snap movement like Pacman */
+function snapTo(r,c){
+  if(!player) return;
+  player.position.x=(c-COLS/2)*tileSize;
+  player.position.z=(r-ROWS/2)*tileSize;
+  player.rotation.y=Math.atan2(-dir[1],dir[0]);
+}
 
-  function snapTo(r,c){
-    if(!player)return;
-    currentTile=[r,c];
-    player.position.x=(c-COLS/2)*tileSize;
-    player.position.z=(r-ROWS/2)*tileSize;
-    player.rotation.y=Math.atan2(dir[0],dir[1]);
+function updateMove(){
+  if(!player) return;
+  if(pendingDir){
+    const [dr,dc]=pendingDir;
+    if(grid[currentTile[0]+dr][currentTile[1]+dc]===0) dir=[dr,dc];
+    pendingDir=null;
   }
-
-  function trySetDir(dr,dc){
-    const nr=currentTile[0]+dr, nc=currentTile[1]+dc;
-    if(grid[nr]?.[nc]===0) pendingDir=[dr,dc];
-  }
-  window.addEventListener("keydown",e=>{
-    if(e.key==="ArrowUp")trySetDir(-1,0);
-    if(e.key==="ArrowDown")trySetDir(1,0);
-    if(e.key==="ArrowLeft")trySetDir(0,-1);
-    if(e.key==="ArrowRight")trySetDir(0,1);
-  });
-
-  function updateMove(){
-    if(!player||dir[0]===0&&dir[1]===0)return;
-    if(pendingDir){
-      const [dr,dc]=pendingDir;
-      if(grid[currentTile[0]+dr]?.[currentTile[1]+dc]===0) dir=[dr,dc];
-      pendingDir=null;
-    }
-    const nr=currentTile[0]+dir[0], nc=currentTile[1]+dir[1];
-    if(grid[nr]?.[nc]===0) snapTo(nr,nc);
-    else dir=[0,0];
+  const nr=currentTile[0]+dir[0];
+  const nc=currentTile[1]+dir[1];
+  if(grid[nr][nc]===0){
+    currentTile=[nr,nc];
+    snapTo(nr,nc);
     eatOrb();
   }
-
-  function eatOrb(){
-    for(const o of orbs){
-      if(o.r===currentTile[0]&&o.c===currentTile[1]&&o.mesh.visible){
-        o.mesh.visible=false;
-        collected++;
-        if(collected===orbs.length) winGame();
-      }
-    }
-  }
-
-  function winGame(){
-    renderer.setAnimationLoop(null);
-    setTimeout(()=>location.reload(),500);
-  }
-
-  let start=performance.now();
-  renderer.setAnimationLoop(()=>{
-    if(player){
-      document.getElementById("timer").innerText=((performance.now()-start)/1000).toFixed(1)+"s";
-      updateMove();
-      updateArrow();
-    }
-    renderer.render(scene,camera);
-  });
 }
+
+function eatOrb(){
+  for(const orb of orbs){
+    if(orb.r===currentTile[0]&&orb.c===currentTile[1]&&orb.mesh.visible){
+      orb.mesh.visible=false;
+      collected++;
+      log("Collected orb: "+collected);
+      if(collected===orbs.length) winGame();
+    }
+  }
+}
+
+function winGame(){
+  gameRunning=false;
+  winScreen.classList.remove("hidden");
+  log("Player won!");
+}
+
+/* Reset game */
+document.getElementById("resetBtn").addEventListener("touchstart", resetGame);
+function resetGame(){
+  winScreen.classList.add("hidden");
+  generateMaze();
+  spawnOrbs();
+  currentTile=[1,1];
+  dir=[0,1];
+  startTime=performance.now();
+  gameRunning=true;
+  log("Game reset");
+}
+
+function renderLoop(){
+  if(gameRunning) updateMove();
+  renderer.render(scene,camera);
+}
+
+/* Keyboard fallback for desktop testing */
+window.addEventListener("keydown",e=>{
+  if(e.key==="ArrowUp") pendingDir=[-1,0];
+  if(e.key==="ArrowDown") pendingDir=[1,0];
+  if(e.key==="ArrowLeft") pendingDir=[0,-1];
+  if(e.key==="ArrowRight") pendingDir=[0,1];
+});
 </script>
 
 </body>
 </html>
-#v1.0.3
+#v1.0.4
