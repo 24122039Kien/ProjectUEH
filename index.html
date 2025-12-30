@@ -8,11 +8,11 @@
 <style>
   body { margin:0; overflow:hidden; font-family:sans-serif; }
 
-  /* ===== INTRO SCREEN ===== */
+  /* ===== Màn hình intro overlay (UI thường, chưa vào AR) ===== */
   #introScreen {
     position: fixed;
     inset: 0;
-    background-image: url('Background.png'); /* <<< THAY ẢNH NỀN INTRO Ở ĐÂY */
+    background-image: url('Background.png'); /* <<< ẢNH NỀN INTRO */
     background-size: cover;
     background-position: center;
     display:flex;
@@ -23,7 +23,42 @@
   }
   #introScreen.hidden { display:none; }
 
-  /* ===== RULE SLIDESHOW ===== */
+  #startARBtn {
+    padding:12px 28px;
+    font-size:18px;
+    border-radius:8px;
+    border:none;
+    cursor:pointer;
+    background:white;
+  }
+
+  /* ===== Nút icon fixed (loa, help) ===== */
+  .iconBtn {
+    position: fixed;
+    width:48px; height:48px;
+    border:none; background:none;
+    background-size:60%;
+    background-repeat:no-repeat;
+    background-position:center;
+    cursor:pointer;
+    z-index:9999;
+  }
+
+  #volumeBtn {
+    top:16px; right:16px;
+    background-image:url('Volume_on.png'); /* <<< ICON LOA BẬT */
+  }
+  #volumeBtn.dimmed {
+    background-image:url('Volume_off.png'); /* <<< ICON LOA TẮT */
+    opacity:0.4;
+  }
+
+  #helpBtn {
+    bottom:16px; right:16px;
+    background-image:url('Help.png'); /* <<< ICON HELP */
+  }
+
+  /* ===== Màn hình slideshow luật chơi ===== */
   #ruleScreen {
     position: fixed;
     inset: 0;
@@ -42,7 +77,7 @@
     pointer-events:none;
   }
 
-  /* ===== WIN SCREEN ===== */
+  /* ===== Màn hình thắng ===== */
   #winScreen {
     position: fixed;
     inset: 0;
@@ -61,33 +96,7 @@
     pointer-events:none;
   }
 
-  /* ===== ICON BUTTONS ===== */
-  .iconBtn {
-    position: fixed;
-    width:48px; height:48px;
-    border:none; background:none;
-    background-size:60%;
-    background-repeat:no-repeat;
-    background-position:center;
-    cursor:pointer;
-    z-index:9999;
-  }
-
-  #volumeBtn {
-    top:16px; right:16px;
-    background-image:url('Volume_on.png'); /* <<< THAY ICON LOA BẬT Ở ĐÂY */
-  }
-  #volumeBtn.dimmed {
-    background-image:url('Volume_off.png'); /* <<< THAY ICON LOA TẮT Ở ĐÂY */
-    opacity:0.4;
-  }
-
-  #helpBtn {
-    bottom:16px; right:16px;
-    background-image:url('Help.png'); /* <<< THAY ICON LUẬT CHƠI Ở ĐÂY */
-  }
-
-  /* ===== TIMER UI ===== */
+  /* ===== Timer ===== */
   #timer {
     position:fixed; top:16px; left:16px;
     font-size:20px; background:rgba(0,0,0,0.5);
@@ -99,26 +108,29 @@
 
 <body>
 
-<!-- ===== INTRO OVERLAY ===== -->
+<!-- Intro UI -->
 <div id="introScreen">
-  <img src="IntroTitle.png" style="width:260px;margin-bottom:20px"/> <!-- <<< THAY LOGO/TITLE Ở ĐÂY -->
-  <button id="startBtn">Bắt đầu AR</button>
+  <!-- Không dùng logo nữa -->
+  <button id="startARBtn">Bắt đầu AR</button>
 </div>
 
-<!-- ===== BUTTONS ===== -->
+<!-- Nút điều khiển âm lượng -->
 <button id="volumeBtn" class="iconBtn"></button>
+
+<!-- Nút xem luật chơi -->
 <button id="helpBtn" class="iconBtn"></button>
 
-<!-- ===== RULE SLIDESHOW OVERLAY ===== -->
+<!-- Màn hình slideshow rule -->
 <div id="ruleScreen" class="hidden">
-  <img id="ruleImage" src="LoiNgo.png"/> <!-- Slide ảnh luật chơi sẽ đổi src bằng JS -->
+  <img id="ruleImage" src="LoiNgo.png"/> <!-- <<< SLIDE MẶC ĐỊNH PHẢI TỒN TẠI -->
 </div>
 
-<!-- ===== WIN OVERLAY ===== -->
+<!-- Màn hình thắng -->
 <div id="winScreen" class="hidden">
-  <img src="Win.png"/> <!-- <<< THAY ẢNH OVERLAY THẮNG Ở ĐÂY -->
+  <img src="Win.png"/> <!-- <<< ẢNH THẮNG -->
 </div>
 
+<!-- Timer UI -->
 <div id="timer">0.0s</div>
 
 <script type="module">
@@ -126,188 +138,226 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 import { ARButton } from 'https://unpkg.com/three@0.160.0/examples/jsm/webxr/ARButton.js';
 import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 
-/* ===== GAME CONFIG ===== */
-const SCALE_MAZE = 0.4;  // Maze scale 40%
-const ROWS = 15;
-const COLS = 15;
+/* ===== Logic Intro UI ===== */
+const introScreen = document.getElementById("introScreen");
+const ruleScreen = document.getElementById("ruleScreen");
+const ruleImage = document.getElementById("ruleImage");
+const winScreen = document.getElementById("winScreen");
 
-/* ===== MAZE GENERATION (DFS Backtracking) ===== */
-let maze = Array.from({length:ROWS},()=>Array(COLS).fill(1));
-const dirs = [[0,2],[2,0],[0,-2],[-2,0]];
-function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} }
-function carve(r=1,c=1){
-  maze[r][c]=0;
-  const d=[...dirs]; shuffle(d);
-  for(const [dr,dc] of d){
-    const nr=r+dr, nc=c+dc;
-    const br=r+dr/2, bc=c+dc/2;
-    if(nr>0&&nc>0&&nr<ROWS-1&&nc<COLS-1&&maze[nr][nc]===1){
-      maze[br][bc]=0;
-      carve(nr,nc);
-    }
-  }
-}
-carve();
+/* Slideshow luật chơi */
+const ruleSlides = ["LoiNgo.png", "LuatChoi.png"]; // <<< THAY ASSET SLIDESHOW TẠI ĐÂY
+let ruleIndex = 0;
 
-/* ===== SETUP AR SCENE ===== */
-const scene=new THREE.Scene();
-const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.01,50);
-const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
-renderer.setSize(innerWidth,innerHeight);
-renderer.xr.enabled=true;
-document.body.appendChild(renderer.domElement);
-document.body.appendChild(ARButton.createButton(renderer,{requiredFeatures:['hit-test']}));
-
-const light=new THREE.HemisphereLight(1,1,1);
-scene.add(light);
-
-/* ===== BUILD MAZE WALLS ===== */
-const mazeGroup=new THREE.Group();
-scene.add(mazeGroup);
-const tileSize=0.25 * SCALE_MAZE;
-const wallThickness=0.045;
-const wallHeight=0.20;
-
-for(let r=0;r<ROWS;r++){
-  for(let c=0;c<COLS;c++){
-    if(maze[r][c]===1){
-      const wall=new THREE.Mesh(
-        new THREE.BoxGeometry(wallThickness,wallHeight,tileSize),
-        new THREE.MeshStandardMaterial()
-      );
-      wall.position.set((c-COLS/2)*tileSize,wallHeight/2,(r-ROWS/2)*tileSize);
-      mazeGroup.add(wall);
-    }
-  }
-}
-
-/* ===== SPAWN COLLECTIBLE ORBS ===== */
-let orbs=[], collected=0;
-const orbGeo=new THREE.SphereGeometry(0.02,12,12);
-const orbMat=new THREE.MeshStandardMaterial({metalness:0.3,roughness:0.5});
-const totalOrbs=20;
-
-while(orbs.length<totalOrbs){
-  const r=Math.floor(Math.random()*ROWS), c=Math.floor(Math.random()*COLS);
-  if(maze[r][c]===0){
-    const orb=new THREE.Mesh(orbGeo,orbMat);
-    orb.position.set((c-COLS/2)*tileSize,0.04,(r-ROWS/2)*tileSize);
-    scene.add(orb);
-    orbs.push({mesh:orb,r,c});
-  }
-}
-
-/* ===== LOAD PLAYER MODEL ===== */
-const loader=new GLTFLoader();
-let player;
-loader.load("model.glb", gltf => {  /* <<< THAY MODEL .GLB NHÂN VẬT TẠI FILE MODEL.GLB TRONG CÙNG THƯ MỤC */
-  player = gltf.scene;
-  player.scale.set(0.12,0.12,0.12);
-  scene.add(player);
-  snapToTile(1,1);
-  addArrow();
-});
-
-/* ===== DIRECTION ARROW (OPTIONAL INDICATOR) ===== */
-let arrow;
-function addArrow(){
-  const geo=new THREE.ConeGeometry(0.02,0.06,8).rotateX(Math.PI/2);
-  arrow=new THREE.Mesh(geo,new THREE.MeshStandardMaterial());
-  scene.add(arrow);
-}
-function updateArrow(){
-  if(!player||!arrow)return;
-  arrow.position.set(player.position.x,0.12,player.position.z+0.05);
-  arrow.rotation.z=Math.atan2(dir[0],dir[1]);
-}
-
-/* ===== PAC-MAN STYLE TILE MOVEMENT ===== */
-let dir=[0,1], pendingDir=null;
-let currentTile=[1,1];
-
-function snapToTile(r,c){
-  if(!player)return;
-  player.position.x=(c-COLS/2)*tileSize;
-  player.position.z=(r-ROWS/2)*tileSize;
-  player.rotation.y = Math.atan2(dir[0], dir[1]);
-}
-
-function isFree(r,c){ return maze[r]?.[c]===0; }
-
-function updateMove(dt){
-  if(!player) return;
-  if(pendingDir){
-    const [dr,dc]=pendingDir;
-    if(isFree(currentTile[0]+dr,currentTile[1]+dc)){ dir=[dr,dc]; }
-    pendingDir=null;
-  }
-  const nr=currentTile[0]+dir[0], nc=currentTile[1]+dir[1];
-  if(isFree(nr,nc)){ currentTile=[nr,nc]; snapToTile(nr,nc); checkOrb(); }
-}
-
-function checkOrb(){
-  for(const o of orbs){
-    if(o.r===currentTile[0] && o.c===currentTile[1] && o.mesh.visible){
-      o.mesh.visible=false;
-      collected++;
-      if(collected===totalOrbs) winGame();
-    }
-  }
-}
-
-/* ===== WIN GAME ===== */
-function winGame(){
-  showWin();
-  gameRunning=false;
-}
-
-const winScreen=document.getElementById("winScreen");
-function showWin(){ winScreen.classList.remove("hidden"); }
-winScreen.addEventListener("click",()=>{ winScreen.classList.add("hidden"); document.getElementById("introScreen").classList.remove("hidden"); });
-
-/* ===== RULE SLIDESHOW ===== */
-const ruleScreen=document.getElementById("ruleScreen");
-const ruleImage=document.getElementById("ruleImage");
-const ruleSlides=["LoiNgo.png","LuatChoi.png"]; /* <<< THAY 2 ẢNH SLIDESHOW Ở ĐÂY */
-
-let ruleIndex=0;
-ruleScreen.addEventListener("click",()=>{
-  ruleIndex++;
-  if(ruleIndex<ruleSlides.length) ruleImage.src=ruleSlides[ruleIndex];
-  else ruleScreen.classList.add("hidden");
-});
-
-function showRules(){ ruleIndex=0; ruleScreen.classList.remove("hidden"); ruleImage.src=ruleSlides[0]; gameRunning=false; }
-document.getElementById("helpBtn").addEventListener("click",showRules);
-
-/* ===== MUSIC TOGGLE ===== */
-const bgMusic = new Audio("background.mp3"); /* <<< THAY NHẠC NỀN .MP3 Ở ĐÂY, FILE MP3 ĐỂ TRONG CÙNG THƯ MỤC */
+/* Nhạc nền */
+const bgMusic = new Audio("Audio.mp3"); // <<< MP3 ĐƯỢC, THAY TÊN FILE NẾU CẦN
 bgMusic.loop = true;
 bgMusic.volume = 0.5;
-const volumeBtn=document.getElementById("volumeBtn");
-volumeBtn.addEventListener("click",()=>{ bgMusic.muted=!bgMusic.muted; volumeBtn.classList.toggle("dimmed"); });
+bgMusic.play().catch(()=>console.log("Music blocked until user interaction"));
 
-/* ===== TIMER ===== */
-let gameRunning=false, start=0, elapsed=0, last=performance.now();
-document.getElementById("startBtn").onclick=()=>{ document.getElementById("introScreen").classList.add("hidden"); gameRunning=true; start=performance.now(); bgMusic.play(); };
+/* Toggle âm lượng */
+const volumeBtn = document.getElementById("volumeBtn");
+volumeBtn.addEventListener("click", () => {
+  bgMusic.muted = !bgMusic.muted;
+  volumeBtn.classList.toggle("dimmed");
+});
 
-function render(){
-  const now=performance.now();
-  const dt=(now-last)/1000;
-  last=now;
+/* Hiện slideshow luật chơi */
+document.getElementById("helpBtn").addEventListener("click", () => {
+  ruleIndex = 0;
+  ruleScreen.classList.remove("hidden");
+  ruleImage.src = ruleSlides[ruleIndex];
+  introScreen.classList.add("hidden"); // Ẩn intro khi xem luật
+});
 
-  if(gameRunning){
-    elapsed=(now-start);
-    document.getElementById("timer").innerText=(elapsed/1000).toFixed(1)+"s";
-    updateMove(dt);
-    updateArrow();
+/* Click để next slide rule */
+ruleScreen.addEventListener("click", () => {
+  ruleIndex++;
+  if (ruleIndex < ruleSlides.length) {
+    ruleImage.src = ruleSlides[ruleIndex];
+  } else {
+    ruleScreen.classList.add("hidden");
+    introScreen.classList.remove("hidden"); // Xem xong rule thì hiện lại intro
   }
-  renderer.render(scene,camera);
-}
-renderer.setAnimationLoop(render);
-</script>
+});
 
+/* Khi bấm start AR → ẩn intro và chạy game AR */
+document.getElementById("startARBtn").addEventListener("click", () => {
+  introScreen.classList.add("hidden"); // Bắt buộc ẩn intro overlay để không che AR scene
+  initARGame();
+});
+
+/* ===== Hàm khởi tạo AR Game ===== */
+function initARGame(){
+
+  /* --- Cấu hình mê cung --- */
+  const SCALE = 0.4;
+  const ROWS = 15, COLS = 15;
+
+  /* --- Generate maze bằng DFS backtracking --- */
+  let grid = Array.from({length:ROWS},()=>Array(COLS).fill(1));
+  const dirs = [[0,2],[2,0],[0,-2],[-2,0]];
+  const shuffle = a => a.sort(()=>Math.random()-0.5);
+  const carve = (r=1,c=1) => {
+    grid[r][c]=0;
+    for(const [dr,dc] of shuffle([...dirs])){
+      const nr=r+dr, nc=c+dc, br=r+dr/2, bc=c+dc/2;
+      if(nr>0&&nc>0&&nr<ROWS-1&&nc<COLS-1&&grid[nr][nc]===1){
+        grid[br][bc]=0;
+        carve(nr,nc);
+      }
+    }
+  };
+  carve();
+
+  /* Đục thêm tile để tạo loop */
+  for(let i=0;i<40;i++){
+    const r=Math.floor(Math.random()*(ROWS-2))+1;
+    const c=Math.floor(Math.random()*(COLS-2))+1;
+    if(grid[r][c]===1) grid[r][c]=0;
+  }
+
+  /* --- Setup AR scene --- */
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.01,50);
+  const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+  renderer.setSize(innerWidth,innerHeight);
+  renderer.xr.enabled=true;
+  document.body.appendChild(renderer.domElement);
+  document.body.appendChild(ARButton.createButton(renderer,{requiredFeatures:['hit-test']}));
+  scene.add(new THREE.HemisphereLight(1,1,1));
+
+  /* --- Build tường mê cung 3D --- */
+  const mazeGroup=new THREE.Group();
+  scene.add(mazeGroup);
+  const tileSize=0.25 * SCALE;
+  const wallThickness=0.045;
+  const wallHeight=0.20;
+
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      if(grid[r][c]===1){
+        const wall=new THREE.Mesh(
+          new THREE.BoxGeometry(wallThickness,wallHeight,tileSize),
+          new THREE.MeshStandardMaterial()
+        );
+        wall.position.set((c-COLS/2)*tileSize,wallHeight/2,(r-ROWS/2)*tileSize);
+        mazeGroup.add(wall);
+      }
+    }
+  }
+
+  /* --- Spawn orb vàng --- */
+  let collected = 0;
+  const orbs = [];
+  const totalOrbs = 20;
+
+  while(orbs.length < totalOrbs){
+    const r=Math.floor(Math.random()*ROWS);
+    const c=Math.floor(Math.random()*COLS);
+    if(grid[r][c] === 0){
+      const orb=new THREE.Mesh(new THREE.SphereGeometry(0.02,12,12),new THREE.MeshStandardMaterial());
+      orb.position.set((c-COLS/2)*tileSize,0.04,(r-ROWS/2)*tileSize);
+      scene.add(orb);
+      orbs.push({mesh:orb, r, c});
+    }
+  }
+
+  /* --- Load player --- */
+  const loader=new GLTFLoader();
+  let player, currentTile=[1,1], dir=[0,1], pendingDir=null;
+
+  loader.load("model.glb", gltf => { /* <<< MODEL NHÂN VẬT */
+    player=gltf.scene;
+    player.scale.set(0.12,0.12,0.12);
+    scene.add(player);
+    snapTo(1,1);
+    addArrow();
+  });
+
+  /* --- Arrow chỉ hướng --- */
+  let arrow;
+  function addArrow(){
+    const geo=new THREE.ConeGeometry(0.02,0.06,8).rotateX(Math.PI/2);
+    arrow=new THREE.Mesh(geo,new THREE.MeshStandardMaterial());
+    scene.add(arrow);
+  }
+  function updateArrow(){
+    if(!player||!arrow) return;
+    arrow.position.set(player.position.x,0.12,player.position.z-0.05);
+    arrow.rotation.z=Math.atan2(dir[0],dir[1]);
+  }
+
+  /* --- Di chuyển tile-to-tile --- */
+  function snapTo(r,c){
+    if(!player) return;
+    player.position.x=(c-COLS/2)*tileSize;
+    player.position.z=(r-ROWS/2)*tileSize;
+    player.rotation.y=Math.atan2(dir[0],dir[1]);
+  }
+  function isFree(r,c){ return grid[r]?.[c] === 0; }
+
+  function updateMove(){
+    if(!player) return;
+    if(pendingDir){
+      const [dr,dc]=pendingDir;
+      if(isFree(currentTile[0]+dr,currentTile[1]+dc)) dir=[dr,dc];
+      pendingDir=null;
+    }
+    const nr=currentTile[0]+dir[0];
+    const nc=currentTile[1]+dir[1];
+    if(isFree(nr,nc)){
+      currentTile=[nr,nc];
+      snapTo(nr,nc);
+      checkOrbCollision();
+    }
+  }
+
+  function checkOrbCollision(){
+    for(const orb of orbs){
+      if(orb.r === currentTile[0] && orb.c === currentTile[1] && orb.mesh.visible){
+        orb.mesh.visible = false;
+        collected++;
+        if(collected === orbs.length) triggerWin();
+      }
+    }
+  }
+
+  /* --- Khi thắng game --- */
+  function triggerWin(){
+    winScreen.classList.remove("hidden"); // hiện overlay thắng
+    gameRunning = false;
+  }
+
+  /* --- Reset game khi bấm vào màn thắng --- */
+  winScreen.addEventListener("click", () => {
+    winScreen.classList.add("hidden"); // ẩn overlay
+    resetGame(); // reset lại AR game
+  });
+
+  function resetGame(){
+    // Reload trang để reset hoàn toàn scene và state
+    location.reload();
+  }
+
+  /* --- Animation loop --- */
+  let gameRunning=true, start=performance.now(), elapsed=0;
+  const timerUI=document.getElementById("timer");
+
+  function renderLoop(){
+    if(gameRunning){
+      elapsed = performance.now() - start;
+      timerUI.innerText = (elapsed/1000).toFixed(1) + "s";
+      updateMove();
+      updateArrow();
+    }
+    renderer.render(scene,camera);
+  }
+
+  renderer.setAnimationLoop(renderLoop);
+}
+
+</script>
 </body>
 </html>
-
-# v1.0.0
+</html>
+#v1.0.1
