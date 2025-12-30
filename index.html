@@ -5,17 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>WebAR Maze - Pacman Style</title>
 
-<!-- Tối ưu tải hình nền intro -->
+<!-- Preload hình nền để tránh lag/flash trên iPhone -->
 <link rel="preload" as="image" href="Background.png">
 
 <style>
   body { margin:0; overflow:hidden; font-family:sans-serif; }
 
-  /* ===== MÀN HÌNH INTRO ===== */
+  /* ===== INTRO SCREEN ===== */
   #introScreen {
     position: fixed;
     inset: 0;
-    background-image: url('Background.png'); /* <<< Bạn thay hình nền intro ở đây */
+    background-image: url('Background.png'); /* <<< THAY ẢNH NỀN INTRO Ở ĐÂY */
     background-size: cover;
     background-position: center;
     display:flex;
@@ -35,33 +35,33 @@
     background:white;
   }
 
-  /* ===== NÚT ICON GÓC MÀN HÌNH ===== */
+  /* ===== ICON BUTTONS ===== */
   .iconBtn {
     position: fixed;
-    width:64px; height:64px; /* Nút to hơn */
+    width:64px; height:64px; /* bạn có thể chỉnh kích thước nút ở đây nếu cần */
     border:none; background:none;
     background-size:70%;
     background-repeat:no-repeat;
     background-position:center;
     cursor:pointer;
-    z-index:10001;
+    z-index:10001; /* luôn cao hơn intro background để không bị che */
   }
 
   #volumeBtn {
     top:16px; right:16px;
-    background-image:url('Volume_on.png'); /* <<< Bạn thay icon loa bật ở đây */
+    background-image:url('Volume_on.png'); /* <<< THAY ICON LOA BẬT Ở ĐÂY */
   }
   #volumeBtn.dimmed {
-    background-image:url('Volume_off.png'); /* <<< Bạn thay icon loa tắt ở đây */
+    background-image:url('Volume_off.png'); /* <<< THAY ICON LOA TẮT Ở ĐÂY */
     opacity:0.5;
   }
 
   #helpBtn {
     bottom:16px; right:16px;
-    background-image:url('Help.png'); /* <<< Bạn thay icon help ở đây */
+    background-image:url('Help.png'); /* <<< THAY ICON HELP Ở ĐÂY */
   }
 
-  /* ===== SLIDESHOW LUẬT CHƠI ===== */
+  /* ===== RULE SLIDESHOW ===== */
   #ruleScreen {
     position: fixed;
     inset: 0;
@@ -76,11 +76,11 @@
     width:90vw;
     height:90vh;
     object-fit: contain;
-    background:rgba(0,0,0,0.6); /* Làm tối nền phía sau */
+    background:rgba(0,0,0,0.6); /* overlay tối phía sau khi xem slide */
     pointer-events:none;
   }
 
-  /* ===== MÀN HÌNH THẮNG ===== */
+  /* ===== WIN SCREEN ===== */
   #winScreen {
     position: fixed;
     inset: 0;
@@ -88,7 +88,8 @@
     display:flex;
     justify-content:center;
     align-items:center;
-    z-index: 10001;
+    flex-direction:column;
+    z-index: 10003;
   }
   #winScreen.hidden { display:none; }
   #winScreen img {
@@ -108,7 +109,15 @@
     cursor:pointer;
   }
 
-  /* ===== DEBUG OVERLAY ===== */
+  /* ===== TIMER ===== */
+  #timer {
+    position:fixed; top:16px; left:16px;
+    font-size:20px; background:rgba(0,0,0,0.5);
+    color:white; padding:6px 10px; border-radius:6px;
+    z-index:20000;
+  }
+
+  /* ===== DEBUG ===== */
   #debug {
     position:fixed;
     top:10px; left:50%;
@@ -118,7 +127,7 @@
     font-size:14px;
     padding:6px 10px;
     border-radius:6px;
-    z-index:20000;
+    z-index:30000;
     max-width:90vw;
     word-wrap:break-word;
   }
@@ -135,11 +144,11 @@
 <button id="helpBtn" class="iconBtn"></button>
 
 <div id="ruleScreen" class="hidden">
-  <img id="ruleImage" src="LoiNgo.png"/> <!-- <<< Thay slide lời ngỏ của bạn ở đây -->
+  <img id="ruleImage" src="LoiNgo.png"/> <!-- <<< THAY ẢNH SLIDE 1 Ở ĐÂY -->
 </div>
 
 <div id="winScreen" class="hidden">
-  <img src="Win.png"/> <!-- <<< Thay ảnh overlay thắng trận của bạn ở đây -->
+  <img src="Win.png"/> <!-- <<< THAY ẢNH THẮNG Ở ĐÂY -->
   <button id="resetBtn">Chơi lại</button>
 </div>
 
@@ -148,97 +157,86 @@
 
 <script type="module">
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+import { ARButton } from 'https://unpkg.com/three@0.160.0/examples/jsm/webxr/ARButton.js';
 import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 
-/* ===== UI ELEMENTS ===== */
+/* ===== UI ===== */
 const introScreen = document.getElementById("introScreen");
 const ruleScreen = document.getElementById("ruleScreen");
-const ruleImage = document.getElementById("ruleImage");
+const ruleImageUI = document.getElementById("ruleImage");
 const winScreen = document.getElementById("winScreen");
+const timerUI = document.getElementById("timer");
 const debugUI = document.getElementById("debug");
 
 /* ===== RULE SLIDES ===== */
-const ruleSlides = ["LoiNgo.png", "LuatChoi.png"]; // <<< Bạn thay 2 file slide luật chơi của bạn tại đây
+const ruleSlides = ["LoiNgo.png", "LuatChoi.png"]; /* <<< THAY 2 ẢNH CỦA BẠN Ở ĐÂY */
 let ruleIndex = 0;
 
-/* ===== BACKGROUND MUSIC ===== */
-const bgMusic = new Audio("Audio.mp3"); // <<< Bạn thay file nhạc nền .mp3 của bạn ở đây
+/* ===== MUSIC ===== */
+const bgMusic = new Audio("Audio.mp3"); /* <<< THAY FILE MP3 Ở ĐÂY */
 bgMusic.loop = true;
 bgMusic.volume = 0.5;
 bgMusic.muted = false;
 
-/* Toggle volume */
-const volumeBtn = document.getElementById("volumeBtn");
-volumeBtn.addEventListener("touchstart", () => {
-  bgMusic.muted = !bgMusic.muted;
-  volumeBtn.classList.toggle("dimmed");
-  log("Toggled volume: " + (bgMusic.muted ? "OFF" : "ON"));
-});
-
-/* Open rule slideshow */
-document.getElementById("helpBtn").addEventListener("touchstart", () => {
-  ruleIndex = 0;
-  ruleScreen.classList.remove("hidden");
-  ruleImage.src = ruleSlides[ruleIndex];
-  introScreen.classList.add("hidden");
-  log("Opened rule screen");
-});
-
-/* Next slide on any touch */
-ruleScreen.addEventListener("touchstart", () => {
-  ruleIndex++;
-  if (ruleIndex < ruleSlides.length) {
-    ruleImage.src = ruleSlides[ruleIndex];
-    log("Slide → " + ruleSlides[ruleIndex]);
-  } else {
-    ruleScreen.classList.add("hidden");
-    introScreen.classList.remove("hidden");
-    log("Exited rule slideshow");
-  }
-});
-
-/* ===== AR GAME LOGIC ===== */
-let renderer, scene, camera, player;
-let collected = 0;
-let orbs = [];
-let grid, ROWS = 15, COLS = 15;
-let tileSize = 0.25 * 0.4; // 40% scale mặc định
-let currentTile = [1,1];
-let dir = [0,1];
-let pendingDir = null;
-let gameRunning = false;
-let startTime = 0;
-
-/* Debug logger */
+/* debug log */
 function log(msg){
   console.log(msg);
   debugUI.innerText = "DEBUG: " + msg;
 }
 
-/* Start AR */
-document.getElementById("startARBtn").addEventListener("touchstart", async () => {
-  log("User tapped Start AR");
+/* Toggle volume */
+document.getElementById("volumeBtn").addEventListener("pointerdown", () => {
+  bgMusic.muted = !bgMusic.muted;
+  volumeBtn.classList.toggle("dimmed");
+  log("Volume toggled: " + (bgMusic.muted ? "OFF" : "ON"));
+});
+
+/* Open rule slideshow */
+document.getElementById("helpBtn").addEventListener("pointerdown", () => {
+  ruleIndex = 0;
+  ruleScreen.classList.remove("hidden");
+  ruleImageUI.src = ruleSlides[ruleIndex];
+  introScreen.classList.add("hidden");
+  log("Rule screen opened");
+});
+
+/* Next slide on click anywhere */
+ruleScreen.addEventListener("pointerdown", () => {
+  ruleIndex++;
+  if (ruleIndex < ruleSlides.length) {
+    ruleImageUI.src = ruleSlides[ruleIndex];
+    log("Slide → " + ruleSlides[ruleIndex]);
+  } else {
+    ruleScreen.classList.add("hidden");
+    introScreen.classList.remove("hidden");
+    log("Rule slideshow exited");
+  }
+});
+
+/* Start AR Game */
+document.getElementById("startARBtn").addEventListener("pointerdown", async () => {
+  log("Start AR tapped");
   await startARSession();
 });
 
-async function startARSession(){
-  if(!navigator.xr){ log("No WebXR"); return; }
+let renderer, scene, camera, player;
+let orbs = [];
+let grid;
+const TOTAL_ORBS = 20; // <<< tổng orb cần thu thập để thắng
+const ROWS = 15, COLS = 15;
+const SCALE = 0.4;
+const tileSizeBase = 0.25 * SCALE;
 
+async function startARSession(){
+  if(!navigator.xr){ log("WebXR not found"); return; }
   try{
-    const session = await navigator.xr.requestSession('immersive-ar', {
-      requiredFeatures:['hit-test']
-    });
+    const session = await navigator.xr.requestSession('immersive-ar', { requiredFeatures:['hit-test'] });
     setupThree(session);
     introScreen.classList.add("hidden");
     bgMusic.play();
-    log("AR Session started");
-    gameRunning = true;
-    gameRunning = true;
-    gameRunning = true;
-    startTime = performance.now();
   }catch(err){
-    log("AR Session failed: " + err);
-    alert("Không hỗ trợ AR immersive!");
+    log("AR Session error: " + err);
+    alert("Thiết bị không hỗ trợ AR Immersive");
   }
 }
 
@@ -248,6 +246,7 @@ function setupThree(session){
   renderer.xr.enabled = true;
   renderer.xr.setSession(session);
   document.body.appendChild(renderer.domElement);
+  document.body.appendChild(ARButton.createButton(renderer,{requiredFeatures:['hit-test']}));
 
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.01, 50);
@@ -257,10 +256,11 @@ function setupThree(session){
   spawnOrbs();
   loadPlayer();
 
+  gameRunning = true;
+  startTime = performance.now();
   renderer.setAnimationLoop(renderLoop);
 }
 
-/* Generate more complex maze */
 function generateMaze(){
   grid = Array.from({length:ROWS},()=>Array(COLS).fill(1));
   const dirs = [[0,2],[2,0],[0,-2],[-2,0]];
@@ -280,58 +280,59 @@ function generateMaze(){
     const c=Math.floor(Math.random()*(COLS-2))+1;
     if(grid[r][c]===1) grid[r][c]=0;
   }
-  log("Maze generated");
 }
 
-/* Spawn collectible orbs */
 function spawnOrbs(){
-  orbs.forEach(o=>scene.remove(o.mesh));
-  orbs=[];
-  collected=0;
-  for(let i=0;i<20;i++){
+  if(scene && orbs.length){
+    orbs.forEach(o => scene.remove(o.mesh));
+  }
+  orbs=[]; collected=0;
+  for(let i=0;i<TOTAL_ORBS;i++){
     let r,c;
-    do{
-      r=Math.floor(Math.random()*ROWS);
-      c=Math.floor(Math.random()*COLS);
-    }while(grid[r][c]!==0);
+    do{ r=Math.floor(Math.random()*ROWS); c=Math.floor(Math.random()*COLS); }
+    while(grid[r][c]!==0);
     const orb=new THREE.Mesh(new THREE.SphereGeometry(0.02,12,12),new THREE.MeshStandardMaterial());
-    orb.position.set((c-COLS/2)*tileSize,0.04,(r-ROWS/2)*tileSize);
+    orb.position.set((c-COLS/2)*tileSizeBase,0.04,(r-ROWS/2)*tileSizeBase);
     scene.add(orb);
     orbs.push({mesh:orb,r,c});
   }
-  log("Orbs spawned");
 }
 
-/* Load player model */
 function loadPlayer(){
   const loader=new GLTFLoader();
-  loader.load("model.glb",gltf=>{ /* <<< Bạn thay model.glb nhân vật ở đây */
+  loader.load("model.glb",gltf=>{ /* <<< THAY MODEL NHÂN VẬT Ở ĐÂY */
     player=gltf.scene;
     player.scale.set(0.08,0.08,0.08);
     scene.add(player);
-    snapTo(currentTile[0],currentTile[1]);
-    log("Player loaded");
-  },undefined,err=>log("Player load error: "+err));
+    currentTile=[1,1];
+    dir=[0,1];
+    snapTo(1,1);
+  },undefined,err=>log("GLB load error: "+err));
 }
 
-/* Snap movement like Pacman */
 function snapTo(r,c){
   if(!player) return;
-  player.position.x=(c-COLS/2)*tileSize;
-  player.position.z=(r-ROWS/2)*tileSize;
+  if(r<0||r>=ROWS||c<0||c>=COLS) return;
+  player.position.x=(c-COLS/2)*tileSizeBase;
+  player.position.z=(r-ROWS/2)*tileSizeBase;
   player.rotation.y=Math.atan2(-dir[1],dir[0]);
 }
 
+let collected=0, gameRunning=false, startTime=0;
+let dir=[0,1], pendingDir=null, currentTile=[1,1];
+
 function updateMove(){
-  if(!player) return;
+  if(!player||!grid) return;
+  const [dr,dc] = pendingDir ?? [0,0];
   if(pendingDir){
-    const [dr,dc]=pendingDir;
-    if(grid[currentTile[0]+dr][currentTile[1]+dc]===0) dir=[dr,dc];
+    const tr=currentTile[0]+dr, tc=currentTile[1]+dc;
+    if(tr>=0&&tr<ROWS&&tc>=0&&tc<COLS&&grid[tr][tc]===0){
+      dir=[dr,dc];
+    }
     pendingDir=null;
   }
-  const nr=currentTile[0]+dir[0];
-  const nc=currentTile[1]+dir[1];
-  if(grid[nr][nc]===0){
+  const nr=currentTile[0]+dir[0], nc=currentTile[1]+dir[1];
+  if(nr>=0 && nr<ROWS && nc>=0 && nc<COLS && grid[nr][nc]===0){
     currentTile=[nr,nc];
     snapTo(nr,nc);
     eatOrb();
@@ -339,12 +340,12 @@ function updateMove(){
 }
 
 function eatOrb(){
+  if(!Array.isArray(orbs)) return;
   for(const orb of orbs){
     if(orb.r===currentTile[0]&&orb.c===currentTile[1]&&orb.mesh.visible){
       orb.mesh.visible=false;
       collected++;
-      log("Collected orb: "+collected);
-      if(collected===orbs.length) winGame();
+      if(collected===TOTAL_ORBS) winGame();
     }
   }
 }
@@ -352,28 +353,25 @@ function eatOrb(){
 function winGame(){
   gameRunning=false;
   winScreen.classList.remove("hidden");
-  log("Player won!");
 }
 
-/* Reset game */
-document.getElementById("resetBtn").addEventListener("touchstart", resetGame);
-function resetGame(){
+document.getElementById("resetBtn").addEventListener("pointerdown",()=>{
   winScreen.classList.add("hidden");
-  generateMaze();
   spawnOrbs();
+  collected=0;
   currentTile=[1,1];
   dir=[0,1];
   startTime=performance.now();
   gameRunning=true;
-  log("Game reset");
-}
+  snapTo(1,1);
+});
 
 function renderLoop(){
   if(gameRunning) updateMove();
-  renderer.render(scene,camera);
+  if(renderer && scene && camera) renderer.render(scene,camera);
 }
 
-/* Keyboard fallback for desktop testing */
+/* Desktop test keyboard */
 window.addEventListener("keydown",e=>{
   if(e.key==="ArrowUp") pendingDir=[-1,0];
   if(e.key==="ArrowDown") pendingDir=[1,0];
@@ -384,4 +382,4 @@ window.addEventListener("keydown",e=>{
 
 </body>
 </html>
-#v1.0.4
+#v1.0.5
