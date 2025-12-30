@@ -1,285 +1,295 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <title>Nghêu Thần Thú - AR Maze</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <style>
-        body { margin:0; overflow:hidden; font-family:Arial; }
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>WebAR Maze - Pacman Style</title>
 
-        #instructions, #timer {
-            position:absolute;
-            left:50%;
-            transform:translateX(-50%);
-            color:white;
-            background:rgba(0,0,0,0.6);
-            padding:8px 16px;
-            border-radius:20px;
-            z-index:10;
-        }
-        #instructions { top:20px; }
-        #timer { top:65px; }
+<style>
+  body { margin:0; overflow:hidden; font-family:sans-serif; }
 
-        #overlay {
-            position:absolute;
-            bottom:20px;
-            width:100%;
-            text-align:center;
-            display:none;
-            z-index:10;
-        }
-        .btn {
-            padding:14px 28px;
-            font-size:18px;
-            border:none;
-            border-radius:50px;
-            background:rgba(255,255,255,0.85);
-        }
-    </style>
+  /* === Intro Screen === */
+  #introScreen {
+    position: fixed;
+    inset: 0;
+    background-image: url('Background.png'); /* Bạn thay ảnh nền intro tại đây */
+    background-size: cover;
+    background-position: center;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    flex-direction:column;
+    z-index: 10000;
+  }
+  #introScreen.hidden { display:none; }
+
+  /* === Rule slideshow === */
+  #ruleScreen {
+    position: fixed;
+    inset: 0;
+    background:black;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    z-index: 10002;
+  }
+  #ruleScreen.hidden { display:none; }
+  #ruleScreen img {
+    width:100vw;
+    height:100vh;
+    object-fit: contain;
+    background:rgba(0,0,0,0.7);
+    pointer-events:none;
+  }
+
+  /* === Win Screen === */
+  #winScreen {
+    position: fixed;
+    inset: 0;
+    background:black;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    z-index: 10001;
+  }
+  #winScreen.hidden { display:none; }
+  #winScreen img {
+    width:100vw;
+    height:100vh;
+    object-fit: contain;
+    background:rgba(0,0,0,0.6);
+    pointer-events:none;
+  }
+
+  /* === Icon Buttons === */
+  .iconBtn {
+    position: fixed;
+    width:48px; height:48px;
+    border:none; background:none;
+    background-size:60%;
+    background-repeat:no-repeat;
+    background-position:center;
+    cursor:pointer;
+    z-index:9999;
+  }
+
+  #volumeBtn {
+    top:16px; right:16px;
+    background-image:url('Volume.png'); /* Thay icon loa bật */
+  }
+  #volumeBtn.dimmed {
+    background-image:url('Volume_off.png'); /* Thay icon loa tắt */
+    opacity:0.4;
+  }
+
+  #helpBtn {
+    bottom:16px; right:16px;
+    background-image:url('NutThang.png'); /* Thay icon help/luật chơi */
+  }
+
+  /* Timer */
+  #timer {
+    position:fixed; top:16px; left:16px;
+    font-size:20px; background:rgba(0,0,0,0.5);
+    color:white; padding:6px 10px; border-radius:6px;
+    z-index:9999;
+  }
+</style>
 </head>
+
 <body>
 
-<div id="instructions">Rà camera xuống đất và chạm để đặt mê cung</div>
-<div id="timer">⏱ 0.0s</div>
-
-<div id="overlay">
-    <button class="btn" id="btnLeft">⬅️</button>
-    <button class="btn" id="btnGo">⬆️</button>
-    <button class="btn" id="btnRight">➡️</button>
+<div id="introScreen">
+  <img src="INTRO_LOGO_OR_TITLE_IMAGE_HERE" style="width:260px;margin-bottom:20px"/> <!-- Có thể thay bằng logo bạn vẽ -->
+  <button id="startBtn">Bắt đầu AR</button>
 </div>
 
+<button id="volumeBtn" class="iconBtn"></button>
+<button id="helpBtn" class="iconBtn"></button>
+
+<div id="ruleScreen" class="hidden">
+  <img id="ruleImage" src="RULE_SLIDE_1_HERE"/>
+</div>
+
+<div id="winScreen" class="hidden">
+  <img src="Win.png"/> <!-- Thay ảnh overlay thắng trận -->
+</div>
+
+<div id="timer">0.0s</div>
+
 <script type="module">
-import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-import { ARButton } from 'https://unpkg.com/three@0.160.0/examples/jsm/webxr/ARButton.js';
+import * as THREE from 'three';
+import { ARButton } from 'webxr/ARButton.js';
+import { GLTFLoader } from 'loaders/GLTFLoader.js';
 
-/* ================== CẤU HÌNH ================== */
-const CELL_SIZE = 0.25;
-const WALL_THICKNESS = 0.04;
-const WALL_HEIGHT = 0.28;
-const PLAYER_RADIUS = 0.05;
-const MOVE_SPEED = 0.012;
-const ROT_SPEED = 0.05;
+/* === CONFIG === */
+const SCALE_MAZE = 0.24; // Nhỏ hơn 40% maze cũ
+const ROWS = 15;
+const COLS = 15;
 
-/* ================== BIẾN ================== */
-let scene, camera, renderer, controller, reticle;
-let hitTestSource=null, hitTestRequested=false;
-
-let mazeGroup, player, keyItem, gate;
-let walls=[];
-
-let gameStarted=false, hasKey=false, gameEnded=false;
-let moveForward=false, rotateLeft=false, rotateRight=false;
-let startTime=0;
-
-/* ================== MAZE MAP ================== */
-const mazeMap=[
- [1,1,1,1,1,1,1],
- [1,0,0,0,0,0,1],
- [1,0,1,1,1,0,1],
- [1,0,1,0,1,0,1],
- [1,0,1,0,0,0,1],
- [1,0,0,0,1,0,1],
- [1,1,1,1,1,1,1],
-];
-
-init();
-animate();
-
-/* ================== INIT ================== */
-function init(){
-    scene=new THREE.Scene();
-    camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.01,20);
-    scene.add(new THREE.HemisphereLight(0xffffff,0xbbbbff,1));
-
-    renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});
-    renderer.setSize(innerWidth,innerHeight);
-    renderer.xr.enabled=true;
-    document.body.appendChild(renderer.domElement);
-    document.body.appendChild(ARButton.createButton(renderer,{requiredFeatures:['hit-test']}));
-
-    controller=renderer.xr.getController(0);
-    controller.addEventListener('select',onSelect);
-    scene.add(controller);
-
-    reticle=new THREE.Mesh(
-        new THREE.RingGeometry(0.12,0.16,32).rotateX(-Math.PI/2),
-        new THREE.MeshBasicMaterial({color:0x00ff00})
-    );
-    reticle.matrixAutoUpdate=false;
-    reticle.visible=false;
-    scene.add(reticle);
-
-    setupUI();
-}
-
-function setupUI(){
-    btnGo.ontouchstart=()=>moveForward=true;
-    btnGo.ontouchend=()=>moveForward=false;
-    btnLeft.ontouchstart=()=>rotateLeft=true;
-    btnLeft.ontouchend=()=>rotateLeft=false;
-    btnRight.ontouchstart=()=>rotateRight=true;
-    btnRight.ontouchend=()=>rotateRight=false;
-}
-
-/* ================== SPAWN ================== */
-function onSelect(){
-    if(reticle.visible && !gameStarted) spawnGame(reticle.matrix);
-}
-
-function spawnGame(matrix){
-    gameStarted=true;
-    gameEnded=false;
-    hasKey=false;
-    startTime=performance.now();
-
-    overlay.style.display='block';
-    instructions.innerText='Tìm chìa khóa để mở cổng';
-
-    mazeGroup=new THREE.Group();
-    mazeGroup.position.setFromMatrixPosition(matrix);
-    scene.add(mazeGroup);
-
-    mazeGroup.add(new THREE.Mesh(
-        new THREE.BoxGeometry(2,0.05,2),
-        new THREE.MeshPhongMaterial({color:0x808080})
-    ));
-
-    createMazeWalls();
-
-    player=new THREE.Mesh(
-        new THREE.SphereGeometry(PLAYER_RADIUS),
-        new THREE.MeshPhongMaterial({color:0xff0000})
-    );
-    player.position.set(0,0.15,0.8);
-    mazeGroup.add(player);
-
-    const arrow=new THREE.ArrowHelper(
-        new THREE.Vector3(0,0,-1),
-        new THREE.Vector3(0,0.1,0),
-        0.18,0xffaa00
-    );
-    player.add(arrow);
-    player.userData.arrow=arrow;
-
-    keyItem=new THREE.Mesh(
-        new THREE.SphereGeometry(0.06),
-        new THREE.MeshStandardMaterial({color:0xffff00,emissive:0xffcc00})
-    );
-    keyItem.position.set(0.5,0.2,-0.5);
-    mazeGroup.add(keyItem);
-
-    gate=new THREE.Mesh(
-        new THREE.BoxGeometry(0.25,0.4,0.08),
-        new THREE.MeshPhongMaterial({color:0x0000ff})
-    );
-    gate.position.set(-0.5,0.2,-0.8);
-    mazeGroup.add(gate);
-}
-
-/* ================== TƯỜNG MỎNG ================== */
-function createMazeWalls(){
-    walls=[];
-    const mat=new THREE.MeshPhongMaterial({color:0x555555});
-
-    for(let z=0;z<mazeMap.length;z++){
-        for(let x=0;x<mazeMap[z].length;x++){
-            if(mazeMap[z][x]===1){
-                const wall=new THREE.Mesh(
-                    new THREE.BoxGeometry(WALL_THICKNESS,WALL_HEIGHT,CELL_SIZE),
-                    mat
-                );
-                wall.position.set(
-                    (x-3)*CELL_SIZE,
-                    WALL_HEIGHT/2,
-                    (z-3)*CELL_SIZE
-                );
-                mazeGroup.add(wall);
-                walls.push(wall);
-            }
-        }
+/* === Generate Maze DFS Backtracking === */
+let maze = Array.from({length:ROWS},()=>Array(COLS).fill(1));
+const dirs = [[0,2],[2,0],[0,-2],[-2,0]];
+function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} }
+function carve(r=1,c=1){
+  maze[r][c]=0;
+  const d=[...dirs]; shuffle(d);
+  for(const [dr,dc] of d){
+    const nr=r+dr, nc=c+dc;
+    const br=r+dr/2, bc=c+dc/2;
+    if(nr>0&&nc>0&&nr<ROWS-1&&nc<COLS-1&&maze[nr][nc]===1){
+      maze[br][bc]=0;
+      carve(nr,nc);
     }
+  }
+}
+carve();
+
+/* === Setup AR Scene === */
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.01,50);
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.xr.enabled=true;
+document.body.appendChild(renderer.domElement);
+document.body.appendChild(ARButton.createButton(renderer,{requiredFeatures:['hit-test']}));
+
+const light=new THREE.HemisphereLight(1,1,1);
+scene.add(light);
+
+/* === Build Maze Walls === */
+const mazeGroup=new THREE.Group();
+scene.add(mazeGroup);
+const tileSize=0.25 * SCALE_MAZE;
+const wallThickness=0.045;
+const wallHeight=0.20;
+
+for(let r=0;r<ROWS;r++){
+  for(let c=0;c<COLS;c++){
+    if(maze[r][c]===1){
+      const wall=new THREE.Mesh(
+        new THREE.BoxGeometry(wallThickness,wallHeight,tileSize),
+        new THREE.MeshStandardMaterial()
+      );
+      wall.position.set((c-COLS/2)*tileSize,wallHeight/2,(r-ROWS/2)*tileSize);
+      mazeGroup.add(wall);
+    }
+  }
 }
 
-/* ================== COLLISION (KHÔNG XUYÊN) ================== */
-function checkCollisionSphere(pos){
-    for(const w of walls){
-        const box=new THREE.Box3().setFromObject(w);
-        const closest=box.clampPoint(pos.clone(),new THREE.Vector3());
-        if(closest.distanceTo(pos)<PLAYER_RADIUS){
-            return true;
-        }
-    }
-    return false;
+/* === Spawn Orbs (bi vàng) === */
+let orbs=[], collected=0;
+const totalOrbs=20;
+const orbGeo=new THREE.SphereGeometry(0.02,12,12);
+const orbMat=new THREE.MeshStandardMaterial({metalness:0.3,roughness:0.5});
+
+while(orbs.length<totalOrbs){
+  const r=Math.floor(Math.random()*ROWS), c=Math.floor(Math.random()*COLS);
+  if(maze[r][c]===0){
+    const orb=new THREE.Mesh(orbGeo,orbMat);
+    orb.position.set((c-COLS/2)*tileSize,0.04,(r-ROWS/2)*tileSize);
+    scene.add(orb);
+    orbs.push({mesh:orb,r,c});
+  }
 }
 
-/* ================== UPDATE ================== */
-function updateGame(){
-    if(!gameStarted||gameEnded) return;
+/* === Load Player GLB === */
+const loader=new GLTFLoader();
+let player;
+loader.load("model.glb", gltf => {  /* Bạn thay model nhân vật tại đây */
+  player = gltf.scene;
+  player.scale.set(0.12,0.12,0.12);
+  scene.add(player);
+  snapToTile(1,1);
+  addArrow();
+});
 
-    if(rotateLeft) player.rotation.y+=ROT_SPEED;
-    if(rotateRight) player.rotation.y-=ROT_SPEED;
-
-    // cập nhật mũi tên đúng hướng
-    const forward=new THREE.Vector3(0,0,-1)
-        .applyQuaternion(player.quaternion)
-        .normalize();
-    player.userData.arrow.setDirection(forward);
-
-    if(moveForward){
-        const steps=5;
-        const stepSize=MOVE_SPEED/steps;
-        for(let i=0;i<steps;i++){
-            const next=player.position.clone()
-                .add(forward.clone().multiplyScalar(stepSize));
-            if(!checkCollisionSphere(next)){
-                player.position.copy(next);
-            }else break;
-        }
-    }
-
-    if(!hasKey){
-        keyItem.position.y=0.2+Math.sin(performance.now()*0.004)*0.04;
-        if(player.position.distanceTo(keyItem.position)<0.15){
-            hasKey=true;
-            keyItem.visible=false;
-            instructions.innerText='Đã có chìa khóa!';
-        }
-    }
-
-    if(hasKey && player.position.distanceTo(gate.position)<0.2){
-        gameEnded=true;
-        instructions.innerText=`CHIẾN THẮNG! ${((performance.now()-startTime)/1000).toFixed(1)}s`;
-    }
-
-    timer.innerText=`⏱ ${((performance.now()-startTime)/1000).toFixed(1)}s`;
+/* === Arrow chỉ hướng di chuyển === */
+let arrow;
+function addArrow(){
+  const geo=new THREE.ConeGeometry(0.02,0.06,8).rotateX(Math.PI/2);
+  arrow=new THREE.Mesh(geo,new THREE.MeshStandardMaterial());
+  scene.add(arrow);
+}
+function updateArrow(){
+  if(!player||!arrow)return;
+  arrow.position.set(player.position.x,0.12,player.position.z+0.05);
+  arrow.rotation.z=Math.atan2(dir[0],dir[1]); // Không ngược hướng nữa
 }
 
-/* ================== RENDER ================== */
-function animate(){
-    renderer.setAnimationLoop(render);
+/* === Movement Tile-to-Tile === */
+let dir=[0,1], pendingDir=null;
+let currentTile=[1,1];
+function snapToTile(r,c){
+  if(!player)return;
+  player.position.x=(c-COLS/2)*tileSize;
+  player.position.z=(r-ROWS/2)*tileSize;
+  player.rotation.y = Math.atan2(dir[0], dir[1]);
+}
+function isFree(r,c){ return maze[r]?.[c]===0; }
+function updateMove(dt){
+  if(!player) return;
+  if(pendingDir){
+    const [dr,dc]=pendingDir;
+    if(isFree(currentTile[0]+dr,currentTile[1]+dc)){ dir=[dr,dc]; }
+    pendingDir=null;
+  }
+  const nr=currentTile[0]+dir[0], nc=currentTile[1]+dir[1];
+  if(isFree(nr,nc)){ currentTile=[nr,nc]; snapToTile(nr,nc); checkOrb(); }
+}
+function checkOrb(){
+  for(const o of orbs){
+    if(o.r===currentTile[0] && o.c===currentTile[1] && o.mesh.visible){
+      o.mesh.visible=false;
+      collected++;
+      if(collected===totalOrbs) winGame();
+    }
+  }
 }
 
-function render(_,frame){
-    if(frame){
-        const session=renderer.xr.getSession();
-        const ref=renderer.xr.getReferenceSpace();
-        if(!hitTestRequested){
-            session.requestReferenceSpace('viewer').then(s=>{
-                session.requestHitTestSource({space:s}).then(src=>hitTestSource=src);
-            });
-            hitTestRequested=true;
-        }
-        if(hitTestSource){
-            const hits=frame.getHitTestResults(hitTestSource);
-            if(hits.length){
-                reticle.visible=true;
-                reticle.matrix.fromArray(hits[0].getPose(ref).transform.matrix);
-            }
-        }
-    }
-    updateGame();
-    renderer.render(scene,camera);
+/* === Win logic === */
+function winGame(){
+  showWin();
+  gameRunning=false;
 }
+const winScreen=document.getElementById("winScreen");
+function showWin(){ winScreen.classList.remove("hidden"); }
+winScreen.addEventListener("click",()=>{ winScreen.classList.add("hidden"); });
+
+/* === Rule slideshow logic === */
+const ruleScreen=document.getElementById("ruleScreen");
+const ruleImage=document.getElementById("ruleImage");
+const ruleSlides=["LoiNgo.png","LuatChoi.png"]; /* Thay 2 slide luật chơi */
+let ruleIndex=0;
+ruleScreen.addEventListener("click",()=>{
+  ruleIndex++;
+  if(ruleIndex<ruleSlides.length) ruleImage.src=ruleSlides[ruleIndex];
+  else ruleScreen.classList.add("hidden");
+});
+function showRules(){ ruleIndex=0; ruleScreen.classList.remove("hidden"); ruleImage.src=ruleSlides[0]; }
+document.getElementById("helpBtn").addEventListener("click",showRules);
+
+/* === Music toggle === */
+const bgMusic=new Audio("Audio.mp3"); /* Thay nhạc nền */
+bgMusic.loop=true; bgMusic.volume=0.5; bgMusic.play();
+const volumeBtn=document.getElementById("volumeBtn");
+volumeBtn.addEventListener("click",()=>{ bgMusic.muted=!bgMusic.muted; volumeBtn.classList.toggle("dimmed"); });
+
+/* === Timer UI === */
+let gameRunning=false, start=0;
+document.getElementById("startBtn").onclick=()=>{ gameRunning=true; start=performance.now(); };
+function render(){
+  const now=performance.now();
+  if(gameRunning){
+    elapsed=(now-start);
+    document.getElementById("timer").innerText=(elapsed/1000).toFixed(1)+"s";
+    updateMove();
+    updateArrow();
+  }
+  renderer.render(scene,camera);
+}
+renderer.setAnimationLoop(render);
 </script>
+
 </body>
 </html>
