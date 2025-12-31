@@ -2,384 +2,418 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>WebAR Maze - Pacman Style</title>
-
-<!-- Preload hình nền để tránh lag/flash trên iPhone -->
-<link rel="preload" as="image" href="Background.png">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0"/>
+<title>Hành Trình Linh Nghê - AR</title>
 
 <style>
-  body { margin:0; overflow:hidden; font-family:sans-serif; }
-
-  /* ===== INTRO SCREEN ===== */
+  body { margin:0; overflow:hidden; font-family: 'Arial', sans-serif; user-select: none; -webkit-user-select: none; }
+  
+  /* Màn hình Intro */
   #introScreen {
-    position: fixed;
-    inset: 0;
-    background-image: url('Background.png'); /* <<< THAY ẢNH NỀN INTRO Ở ĐÂY */
-    background-size: cover;
-    background-position: center;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    flex-direction:column;
+    position: fixed; inset: 0;
+    /* Dùng màu nền dự phòng nếu ảnh lỗi */
+    background: #FFEFBA; 
+    background-image: url('Background.png'); 
+    background-size: cover; background-position: center;
+    display:flex; flex-direction:column;
+    justify-content:center; align-items:center;
     z-index: 10000;
   }
-  #introScreen.hidden { display:none; }
+  
+  /* Logo/Tiêu đề */
+  h1 {
+    color: #d35400; text-shadow: 2px 2px 0px #fff;
+    font-size: 40px; text-align: center; margin-bottom: 50px;
+    font-weight: 900;
+  }
 
+  /* Nút Bắt đầu */
   #startARBtn {
-    padding:16px 40px;
-    font-size:22px;
-    border-radius:12px;
-    border:none;
-    cursor:pointer;
-    background:white;
+    padding: 15px 40px; font-size: 20px; font-weight: bold;
+    color: white; background: #009432;
+    border: 3px solid white; border-radius: 50px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    cursor: pointer; transition: transform 0.1s;
   }
+  #startARBtn:active { transform: scale(0.95); background: #006266; }
 
-  /* ===== ICON BUTTONS ===== */
-  .iconBtn {
-    position: fixed;
-    width:64px; height:64px; /* bạn có thể chỉnh kích thước nút ở đây nếu cần */
-    border:none; background:none;
-    background-size:70%;
-    background-repeat:no-repeat;
-    background-position:center;
-    cursor:pointer;
-    z-index:10001; /* luôn cao hơn intro background để không bị che */
+  /* UI Game (Ẩn lúc đầu) */
+  .gameUI { display: none; }
+  
+  /* Nút điều hướng ảo (Dành cho PC test) */
+  #dpad {
+    position: fixed; bottom: 20px; right: 20px;
+    display: grid; grid-template-columns: 50px 50px 50px; gap: 5px;
+    z-index: 10001; opacity: 0.5;
   }
+  .dbtn { width: 50px; height: 50px; background: rgba(0,0,0,0.5); border-radius: 8px; border: 1px solid white; color: white; font-size: 20px; display: flex; justify-content: center; align-items: center;}
 
-  #volumeBtn {
-    top:16px; right:16px;
-    background-image:url('Volume_on.png'); /* <<< THAY ICON LOA BẬT Ở ĐÂY */
-  }
-  #volumeBtn.dimmed {
-    background-image:url('Volume_off.png'); /* <<< THAY ICON LOA TẮT Ở ĐÂY */
-    opacity:0.5;
-  }
-
-  #helpBtn {
-    bottom:16px; right:16px;
-    background-image:url('Help.png'); /* <<< THAY ICON HELP Ở ĐÂY */
-  }
-
-  /* ===== RULE SLIDESHOW ===== */
-  #ruleScreen {
-    position: fixed;
-    inset: 0;
-    background:black;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    z-index: 10002;
-  }
-  #ruleScreen.hidden { display:none; }
-  #ruleScreen img {
-    width:90vw;
-    height:90vh;
-    object-fit: contain;
-    background:rgba(0,0,0,0.6); /* overlay tối phía sau khi xem slide */
-    pointer-events:none;
-  }
-
-  /* ===== WIN SCREEN ===== */
-  #winScreen {
-    position: fixed;
-    inset: 0;
-    background:black;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    flex-direction:column;
-    z-index: 10003;
-  }
-  #winScreen.hidden { display:none; }
-  #winScreen img {
-    width:80vw;
-    height:80vh;
-    object-fit: contain;
-    background:rgba(0,0,0,0.5);
-    pointer-events:none;
-  }
-  #resetBtn {
-    margin-top:20px;
-    padding:14px 32px;
-    font-size:20px;
-    border:none;
-    border-radius:10px;
-    background:white;
-    cursor:pointer;
-  }
-
-  /* ===== TIMER ===== */
-  #timer {
-    position:fixed; top:16px; left:16px;
-    font-size:20px; background:rgba(0,0,0,0.5);
-    color:white; padding:6px 10px; border-radius:6px;
-    z-index:20000;
-  }
-
-  /* ===== DEBUG ===== */
-  #debug {
-    position:fixed;
-    top:10px; left:50%;
-    transform:translateX(-50%);
-    background:rgba(255,255,255,0.8);
-    color:black;
-    font-size:14px;
-    padding:6px 10px;
-    border-radius:6px;
-    z-index:30000;
-    max-width:90vw;
-    word-wrap:break-word;
+  /* Bảng hiện lỗi (QUAN TRỌNG ĐỂ DEBUG) */
+  #errorConsole {
+    position: fixed; top: 0; left: 0; width: 100%; height: auto;
+    background: rgba(255, 0, 0, 0.8); color: white;
+    font-size: 12px; padding: 5px; z-index: 99999;
+    pointer-events: none; white-space: pre-wrap;
+    display: none; /* Chỉ hiện khi có lỗi */
   }
 </style>
 </head>
 
 <body>
 
+<div id="errorConsole"></div>
+
 <div id="introScreen">
-  <button id="startARBtn">Bắt đầu AR</button>
+  <h1>HÀNH TRÌNH<br>LINH NGHÊ</h1>
+  <button id="startARBtn">BẮT ĐẦU AR</button>
+  <p style="margin-top:20px; font-size:12px; color:#555;">v1.2 Fixed Logic</p>
 </div>
 
-<button id="volumeBtn" class="iconBtn"></button>
-<button id="helpBtn" class="iconBtn"></button>
-
-<div id="ruleScreen" class="hidden">
-  <img id="ruleImage" src="LoiNgo.png"/> <!-- <<< THAY ẢNH SLIDE 1 Ở ĐÂY -->
+<div id="dpad" class="gameUI">
+    <div></div><div class="dbtn" id="btnUp">⬆️</div><div></div>
+    <div class="dbtn" id="btnLeft">⬅️</div><div></div><div class="dbtn" id="btnRight">➡️</div>
+    <div></div><div class="dbtn" id="btnDown">⬇️</div><div></div>
 </div>
 
-<div id="winScreen" class="hidden">
-  <img src="Win.png"/> <!-- <<< THAY ẢNH THẮNG Ở ĐÂY -->
-  <button id="resetBtn">Chơi lại</button>
-</div>
-
-<div id="timer">0.0s</div>
-<div id="debug">DEBUG: waiting...</div>
+<script>
+    // --- HỆ THỐNG BẮT LỖI (DEBUGGER) ---
+    // Cái này sẽ in lỗi ra màn hình điện thoại để bạn biết tại sao nó đứng
+    window.onerror = function(msg, url, line, col, error) {
+        const consoleDiv = document.getElementById('errorConsole');
+        consoleDiv.style.display = 'block';
+        consoleDiv.innerHTML += `LỖI: ${msg} <br> (Dòng: ${line})<br>`;
+        return false;
+    };
+    window.addEventListener('unhandledrejection', function(event) {
+        const consoleDiv = document.getElementById('errorConsole');
+        consoleDiv.style.display = 'block';
+        consoleDiv.innerHTML += `LỖI ASYNC: ${event.reason}<br>`;
+    });
+</script>
 
 <script type="module">
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 import { ARButton } from 'https://unpkg.com/three@0.160.0/examples/jsm/webxr/ARButton.js';
 import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 
-/* ===== UI ===== */
-const introScreen = document.getElementById("introScreen");
-const ruleScreen = document.getElementById("ruleScreen");
-const ruleImageUI = document.getElementById("ruleImage");
-const winScreen = document.getElementById("winScreen");
-const timerUI = document.getElementById("timer");
-const debugUI = document.getElementById("debug");
-
-/* ===== RULE SLIDES ===== */
-const ruleSlides = ["LoiNgo.png", "LuatChoi.png"]; /* <<< THAY 2 ẢNH CỦA BẠN Ở ĐÂY */
-let ruleIndex = 0;
-
-/* ===== MUSIC ===== */
-const bgMusic = new Audio("Audio.mp3"); /* <<< THAY FILE MP3 Ở ĐÂY */
-bgMusic.loop = true;
-bgMusic.volume = 0.5;
-bgMusic.muted = false;
-
-/* debug log */
-function log(msg){
-  console.log(msg);
-  debugUI.innerText = "DEBUG: " + msg;
-}
-
-/* Toggle volume */
-document.getElementById("volumeBtn").addEventListener("pointerdown", () => {
-  bgMusic.muted = !bgMusic.muted;
-  volumeBtn.classList.toggle("dimmed");
-  log("Volume toggled: " + (bgMusic.muted ? "OFF" : "ON"));
-});
-
-/* Open rule slideshow */
-document.getElementById("helpBtn").addEventListener("pointerdown", () => {
-  ruleIndex = 0;
-  ruleScreen.classList.remove("hidden");
-  ruleImageUI.src = ruleSlides[ruleIndex];
-  introScreen.classList.add("hidden");
-  log("Rule screen opened");
-});
-
-/* Next slide on click anywhere */
-ruleScreen.addEventListener("pointerdown", () => {
-  ruleIndex++;
-  if (ruleIndex < ruleSlides.length) {
-    ruleImageUI.src = ruleSlides[ruleIndex];
-    log("Slide → " + ruleSlides[ruleIndex]);
-  } else {
-    ruleScreen.classList.add("hidden");
-    introScreen.classList.remove("hidden");
-    log("Rule slideshow exited");
-  }
-});
-
-/* Start AR Game */
-document.getElementById("startARBtn").addEventListener("pointerdown", async () => {
-  log("Start AR tapped");
-  await startARSession();
-});
-
-let renderer, scene, camera, player;
-let orbs = [];
-let grid;
-const TOTAL_ORBS = 20; // <<< tổng orb cần thu thập để thắng
+// --- CẤU HÌNH ---
 const ROWS = 15, COLS = 15;
-const SCALE = 0.4;
-const tileSizeBase = 0.25 * SCALE;
+const TILE_SIZE = 0.2; // 20cm mỗi ô
+const MOVE_SPEED = 1.5; // Tốc độ di chuyển (mét/giây)
 
-async function startARSession(){
-  if(!navigator.xr){ log("WebXR not found"); return; }
-  try{
-    const session = await navigator.xr.requestSession('immersive-ar', { requiredFeatures:['hit-test'] });
-    setupThree(session);
-    introScreen.classList.add("hidden");
-    bgMusic.play();
-  }catch(err){
-    log("AR Session error: " + err);
-    alert("Thiết bị không hỗ trợ AR Immersive");
-  }
-}
+// --- BIẾN TOÀN CỤC ---
+let renderer, scene, camera;
+let player, playerMixer;
+let grid = [];
+let mazeGroup; // Nhóm chứa toàn bộ mê cung để AR dễ quản lý
+let isGameRunning = false;
+let clock = new THREE.Clock();
 
-function setupThree(session){
-  renderer = new THREE.WebGLRenderer({antialias:true,alpha:true});
-  renderer.setSize(innerWidth,innerHeight);
-  renderer.xr.enabled = true;
-  renderer.xr.setSession(session);
-  document.body.appendChild(renderer.domElement);
-  document.body.appendChild(ARButton.createButton(renderer,{requiredFeatures:['hit-test']}));
+// --- LOGIC PACMAN (TILE-TO-TILE) ---
+// State: 'IDLE' (đứng yên giữa ô), 'MOVING' (đang trượt sang ô khác)
+let moveState = 'IDLE'; 
+let currentTile = { r: 1, c: 1 }; // Ô hiện tại
+let targetTile = { r: 1, c: 1 };  // Ô đích đến
+let currentDir = { r: 0, c: 0 };  // Hướng đang đi
+let nextDir = { r: 0, c: 0 };     // Hướng dự định đi (Input buffer)
 
-  scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.01, 50);
-  scene.add(new THREE.HemisphereLight(1,1,1));
+// --- KHỞI TẠO ---
+const btnStart = document.getElementById('startARBtn');
+btnStart.addEventListener('click', async () => {
+    console.log("Nút Bắt đầu được nhấn");
+    
+    // 1. Ẩn Intro
+    document.getElementById('introScreen').style.display = 'none';
+    document.querySelectorAll('.gameUI').forEach(e => e.style.display = 'grid');
 
-  generateMaze();
-  spawnOrbs();
-  loadPlayer();
-
-  gameRunning = true;
-  startTime = performance.now();
-  renderer.setAnimationLoop(renderLoop);
-}
-
-function generateMaze(){
-  grid = Array.from({length:ROWS},()=>Array(COLS).fill(1));
-  const dirs = [[0,2],[2,0],[0,-2],[-2,0]];
-  const shuffle = a=>a.sort(()=>Math.random()-0.5);
-  const carve=(r=1,c=1)=>{
-    grid[r][c]=0;
-    for(const[dr,dc]of shuffle([...dirs])){
-      const nr=r+dr,nc=c+dc,br=r+dr/2,bc=c+dc/2;
-      if(nr>0&&nc>0&&nr<ROWS-1&&nc<COLS-1&&grid[nr][nc]===1){
-        grid[br][bc]=0; carve(nr,nc);
-      }
+    // 2. Khởi tạo WebXR
+    if (navigator.xr) {
+        try {
+            const session = await navigator.xr.requestSession('immersive-ar', {
+                requiredFeatures: ['local', 'hit-test'] // Thêm local để ổn định
+            });
+            initThreeJS(session);
+        } catch (e) {
+            alert("Không thể mở AR: " + e.message);
+            // Fallback: Chạy chế độ 3D thường để test nếu AR lỗi
+            initThreeJS(null); 
+        }
+    } else {
+        alert("Thiết bị không hỗ trợ WebXR. Chạy chế độ 3D thường.");
+        initThreeJS(null);
     }
-  };
-  carve();
-  for(let i=0;i<40;i++){
-    const r=Math.floor(Math.random()*(ROWS-2))+1;
-    const c=Math.floor(Math.random()*(COLS-2))+1;
-    if(grid[r][c]===1) grid[r][c]=0;
-  }
-}
-
-function spawnOrbs(){
-  if(scene && orbs.length){
-    orbs.forEach(o => scene.remove(o.mesh));
-  }
-  orbs=[]; collected=0;
-  for(let i=0;i<TOTAL_ORBS;i++){
-    let r,c;
-    do{ r=Math.floor(Math.random()*ROWS); c=Math.floor(Math.random()*COLS); }
-    while(grid[r][c]!==0);
-    const orb=new THREE.Mesh(new THREE.SphereGeometry(0.02,12,12),new THREE.MeshStandardMaterial());
-    orb.position.set((c-COLS/2)*tileSizeBase,0.04,(r-ROWS/2)*tileSizeBase);
-    scene.add(orb);
-    orbs.push({mesh:orb,r,c});
-  }
-}
-
-function loadPlayer(){
-  const loader=new GLTFLoader();
-  loader.load("model.glb",gltf=>{ /* <<< THAY MODEL NHÂN VẬT Ở ĐÂY */
-    player=gltf.scene;
-    player.scale.set(0.08,0.08,0.08);
-    scene.add(player);
-    currentTile=[1,1];
-    dir=[0,1];
-    snapTo(1,1);
-  },undefined,err=>log("GLB load error: "+err));
-}
-
-function snapTo(r,c){
-  if(!player) return;
-  if(r<0||r>=ROWS||c<0||c>=COLS) return;
-  player.position.x=(c-COLS/2)*tileSizeBase;
-  player.position.z=(r-ROWS/2)*tileSizeBase;
-  player.rotation.y=Math.atan2(-dir[1],dir[0]);
-}
-
-let collected=0, gameRunning=false, startTime=0;
-let dir=[0,1], pendingDir=null, currentTile=[1,1];
-
-function updateMove(){
-  if(!player||!grid) return;
-  const [dr,dc] = pendingDir ?? [0,0];
-  if(pendingDir){
-    const tr=currentTile[0]+dr, tc=currentTile[1]+dc;
-    if(tr>=0&&tr<ROWS&&tc>=0&&tc<COLS&&grid[tr][tc]===0){
-      dir=[dr,dc];
-    }
-    pendingDir=null;
-  }
-  const nr=currentTile[0]+dir[0], nc=currentTile[1]+dir[1];
-  if(nr>=0 && nr<ROWS && nc>=0 && nc<COLS && grid[nr][nc]===0){
-    currentTile=[nr,nc];
-    snapTo(nr,nc);
-    eatOrb();
-  }
-}
-
-function eatOrb(){
-  if(!Array.isArray(orbs)) return;
-  for(const orb of orbs){
-    if(orb.r===currentTile[0]&&orb.c===currentTile[1]&&orb.mesh.visible){
-      orb.mesh.visible=false;
-      collected++;
-      if(collected===TOTAL_ORBS) winGame();
-    }
-  }
-}
-
-function winGame(){
-  gameRunning=false;
-  winScreen.classList.remove("hidden");
-}
-
-document.getElementById("resetBtn").addEventListener("pointerdown",()=>{
-  winScreen.classList.add("hidden");
-  spawnOrbs();
-  collected=0;
-  currentTile=[1,1];
-  dir=[0,1];
-  startTime=performance.now();
-  gameRunning=true;
-  snapTo(1,1);
 });
 
-function renderLoop(){
-  if(gameRunning) updateMove();
-  if(renderer && scene && camera) renderer.render(scene,camera);
+function initThreeJS(session) {
+    scene = new THREE.Scene();
+
+    // Camera
+    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+    
+    // Renderer
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    
+    if (session) {
+        renderer.xr.enabled = true;
+        renderer.xr.setSession(session);
+        renderer.xr.setReferenceSpaceType('local');
+    } else {
+        // Setup cho chế độ không AR (Test trên PC)
+        camera.position.set(0, 3, 3);
+        camera.lookAt(0, 0, 0);
+        scene.background = new THREE.Color(0x333333);
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    }
+
+    document.body.appendChild(renderer.domElement);
+
+    // Ánh sáng
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
+    scene.add(hemiLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(5, 10, 5);
+    scene.add(dirLight);
+
+    // Tạo Game World
+    mazeGroup = new THREE.Group();
+    // Đẩy mê cung ra phía trước mặt và thấp xuống (quan trọng cho AR)
+    mazeGroup.position.set(0, -0.5, -1.5); 
+    scene.add(mazeGroup);
+
+    generateMazeData();
+    buildMazeMesh(); // Xây tường
+    createPlayer();  // Tạo nhân vật
+
+    // Bắt sự kiện vuốt tay
+    setupTouchControls();
+
+    isGameRunning = true;
+    renderer.setAnimationLoop(render);
 }
 
-/* Desktop test keyboard */
-window.addEventListener("keydown",e=>{
-  if(e.key==="ArrowUp") pendingDir=[-1,0];
-  if(e.key==="ArrowDown") pendingDir=[1,0];
-  if(e.key==="ArrowLeft") pendingDir=[0,-1];
-  if(e.key==="ArrowRight") pendingDir=[0,1];
+// --- TẠO MÊ CUNG ---
+function generateMazeData() {
+    // 1: Tường, 0: Đường đi
+    grid = Array.from({length: ROWS}, () => Array(COLS).fill(1));
+    
+    // Thuật toán đục tường cơ bản
+    const carve = (r, c) => {
+        grid[r][c] = 0;
+        const dirs = [[0,2], [0,-2], [2,0], [-2,0]].sort(() => Math.random() - 0.5);
+        for(let [dr, dc] of dirs) {
+            const nr = r + dr, nc = c + dc;
+            if(nr > 0 && nr < ROWS-1 && nc > 0 && nc < COLS-1 && grid[nr][nc] === 1) {
+                grid[r + dr/2][c + dc/2] = 0;
+                carve(nr, nc);
+            }
+        }
+    }
+    carve(1, 1);
+    
+    // Đục thêm lỗ ngẫu nhiên cho dễ đi
+    for(let i=0; i<30; i++) {
+        let r = Math.floor(Math.random()*(ROWS-2))+1;
+        let c = Math.floor(Math.random()*(COLS-2))+1;
+        grid[r][c] = 0;
+    }
+    
+    // Đảm bảo vị trí xuất phát (1,1) luôn trống
+    grid[1][1] = 0;
+}
+
+function buildMazeMesh() {
+    const wallGeo = new THREE.BoxGeometry(TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x8e44ad }); // Màu tím
+    const floorGeo = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE);
+    const floorMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
+
+    for(let r=0; r<ROWS; r++) {
+        for(let c=0; c<COLS; c++) {
+            const x = (c - COLS/2) * TILE_SIZE;
+            const z = (r - ROWS/2) * TILE_SIZE;
+
+            if (grid[r][c] === 1) {
+                // Tạo Tường
+                const wall = new THREE.Mesh(wallGeo, wallMat);
+                wall.position.set(x, TILE_SIZE/2, z);
+                mazeGroup.add(wall);
+            } else {
+                // Tạo Sàn (để dễ nhìn đường)
+                const floor = new THREE.Mesh(floorGeo, floorMat);
+                floor.rotation.x = -Math.PI/2;
+                floor.position.set(x, 0.01, z);
+                mazeGroup.add(floor);
+            }
+        }
+    }
+}
+
+// --- TẠO NHÂN VẬT ---
+function createPlayer() {
+    // Thử load file model.glb
+    const loader = new GLTFLoader();
+    loader.load(
+        'model.glb', // Đảm bảo file này nằm cùng thư mục với index.html
+        (gltf) => {
+            player = gltf.scene;
+            setupPlayerMesh();
+        },
+        undefined,
+        (err) => {
+            console.warn("Không load được model, dùng hộp thay thế.");
+            // Fallback: Dùng khối hộp màu vàng nếu không có model
+            const geo = new THREE.BoxGeometry(TILE_SIZE*0.6, TILE_SIZE*0.6, TILE_SIZE*0.6);
+            const mat = new THREE.MeshStandardMaterial({ color: 0xf1c40f });
+            player = new THREE.Mesh(geo, mat);
+            setupPlayerMesh();
+        }
+    );
+}
+
+function setupPlayerMesh() {
+    player.scale.set(0.5, 0.5, 0.5); // Chỉnh scale nếu cần
+    mazeGroup.add(player);
+    // Đặt vị trí ban đầu tại ô (1,1)
+    currentTile = { r: 1, c: 1 };
+    updatePlayerPositionVisual(currentTile.r, currentTile.c);
+}
+
+function updatePlayerPositionVisual(r, c) {
+    if(!player) return;
+    const x = (c - COLS/2) * TILE_SIZE;
+    const z = (r - ROWS/2) * TILE_SIZE;
+    player.position.set(x, TILE_SIZE/2, z); // Nổi lên trên sàn một chút
+}
+
+// --- LOGIC GAME LOOP (QUAN TRỌNG) ---
+function render() {
+    const dt = clock.getDelta();
+    if(isGameRunning && player) {
+        updateMovement(dt);
+    }
+    renderer.render(scene, camera);
+}
+
+function updateMovement(dt) {
+    // 1. Nếu đang đứng yên (IDLE) -> Kiểm tra xem có lệnh di chuyển không
+    if (moveState === 'IDLE') {
+        // Ưu tiên hướng mới (Input buffer)
+        if (nextDir.r !== 0 || nextDir.c !== 0) {
+            if (canMoveTo(currentTile.r + nextDir.r, currentTile.c + nextDir.c)) {
+                currentDir = { ...nextDir };
+                nextDir = { r:0, c:0 }; // Xóa buffer
+                startMoving();
+                return;
+            }
+        }
+        // Nếu không rẽ được, tiếp tục đi hướng cũ
+        if (currentDir.r !== 0 || currentDir.c !== 0) {
+            if (canMoveTo(currentTile.r + currentDir.r, currentTile.c + currentDir.c)) {
+                startMoving();
+            } else {
+                // Đụng tường -> Dừng hẳn
+                currentDir = { r:0, c:0 };
+            }
+        }
+    }
+
+    // 2. Nếu đang di chuyển (MOVING) -> Lerp tới ô đích
+    if (moveState === 'MOVING') {
+        const destX = (targetTile.c - COLS/2) * TILE_SIZE;
+        const destZ = (targetTile.r - ROWS/2) * TILE_SIZE;
+        
+        // Di chuyển Mesh
+        const speed = MOVE_SPEED * dt;
+        const targetVec = new THREE.Vector3(destX, TILE_SIZE/2, destZ);
+        const dist = player.position.distanceTo(targetVec);
+
+        if (dist < speed) {
+            // Đã ĐẾN NƠI
+            player.position.copy(targetVec);
+            currentTile = { ...targetTile };
+            moveState = 'IDLE';
+            
+            // Xoay nhân vật theo hướng đi (Optional)
+            if (currentDir.r === 1) player.rotation.y = 0; // Xuống
+            if (currentDir.r === -1) player.rotation.y = Math.PI; // Lên
+            if (currentDir.c === 1) player.rotation.y = Math.PI/2; // Phải
+            if (currentDir.c === -1) player.rotation.y = -Math.PI/2; // Trái
+        } else {
+            // Đang TRƯỢT
+            const dirVec = new THREE.Vector3().subVectors(targetVec, player.position).normalize();
+            player.position.addScaledVector(dirVec, speed);
+        }
+    }
+}
+
+function startMoving() {
+    targetTile = { 
+        r: currentTile.r + currentDir.r, 
+        c: currentTile.c + currentDir.c 
+    };
+    moveState = 'MOVING';
+}
+
+function canMoveTo(r, c) {
+    // Kiểm tra biên giới hạn
+    if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return false;
+    // Kiểm tra tường (giá trị 1 là tường)
+    if (grid[r][c] === 1) return false;
+    return true;
+}
+
+// --- XỬ LÝ CẢM ỨNG (SWIPE) ---
+function setupTouchControls() {
+    let xDown = null;
+    let yDown = null;
+
+    window.addEventListener('touchstart', (evt) => {
+        xDown = evt.touches[0].clientX;
+        yDown = evt.touches[0].clientY;
+    }, false);
+
+    window.addEventListener('touchmove', (evt) => {
+        if (!xDown || !yDown) return;
+        
+        let xUp = evt.touches[0].clientX;
+        let yUp = evt.touches[0].clientY;
+        let xDiff = xDown - xUp;
+        let yDiff = yDown - yUp;
+
+        // Nhận diện cú vuốt (Threshold > 10px)
+        if (Math.abs(xDiff) > Math.abs(yDiff)) {
+            if (Math.abs(xDiff) > 10) {
+                // Vuốt Trái/Phải
+                nextDir = xDiff > 0 ? { r:0, c:-1 } : { r:0, c:1 };
+            }
+        } else {
+            if (Math.abs(yDiff) > 10) {
+                // Vuốt Lên/Xuống (Lưu ý: Trong Grid 2D, r tăng là đi xuống)
+                nextDir = yDiff > 0 ? { r:-1, c:0 } : { r:1, c:0 };
+            }
+        }
+        // Reset để không bắt vuốt liên tục
+        xDown = null; yDown = null;
+    }, false);
+}
+
+// Hỗ trợ phím mũi tên cho PC
+window.addEventListener('keydown', (e) => {
+    if(e.key === "ArrowUp") nextDir = { r:-1, c:0 };
+    if(e.key === "ArrowDown") nextDir = { r:1, c:0 };
+    if(e.key === "ArrowLeft") nextDir = { r:0, c:-1 };
+    if(e.key === "ArrowRight") nextDir = { r:0, c:1 };
 });
+
+// Hỗ trợ nút ảo trên màn hình
+document.getElementById('btnUp').onclick = () => nextDir = { r:-1, c:0 };
+document.getElementById('btnDown').onclick = () => nextDir = { r:1, c:0 };
+document.getElementById('btnLeft').onclick = () => nextDir = { r:0, c:-1 };
+document.getElementById('btnRight').onclick = () => nextDir = { r:0, c:1 };
+
 </script>
-
 </body>
 </html>
-#v1.0.5
+#v1.0.6
