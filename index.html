@@ -167,7 +167,7 @@ let isMazePlaced = false;
 // Game Logic Vars
 let grid = [];
 let orbMeshes = [];
-const TOTAL_ORBS = 10;
+const TOTAL_ORBS = 20;
 let collectedCount = 0;
 
 // === CẤU HÌNH ===
@@ -220,7 +220,7 @@ function setupThree(session) {
     mazeGroup.visible = false;
     scene.add(mazeGroup);
 
-    createMaze();
+    createMazeDFS();
     spawnOrbs();
     loadPlayer();
 
@@ -466,4 +466,4 @@ function setupTouch() {
 </script>
 </body>
 </html>
-#v1.0.12
+#v1.0.14
