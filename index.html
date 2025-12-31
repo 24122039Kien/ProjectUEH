@@ -29,12 +29,32 @@
   }
   
   #startARBtn {
-    margin-top: 150px; 
-    padding: 15px 40px; font-size: 20px; font-weight: bold;
-    color: #00598B; background: #fff; /* Đổi màu chữ theo tông màu mới */
-    border: 3px solid #00598B; border-radius: 50px;
+    /* 1. VỊ TRÍ: Giảm số này để đưa nút LÊN CAO che chữ "Bắt đầu" gốc */
+    /* Code cũ là 150px, hãy thử giảm xuống khoảng 70px - 90px */
+    margin-top: 80px; 
+    
+    /* 2. MÀU SẮC: Đổi thành màu kem nhạt để trùng với nền ảnh */
+    background: #FEF7E6; 
+    
+    /* Màu chữ: Dùng màu xanh cổ vịt đậm cho giống thiết kế */
+    color: #0E5C6C; 
+
+    /* 3. THẨM MỸ: Bỏ viền và bóng để nút trông như một phần của ảnh */
+    border: none; 
+    box-shadow: none;
+    
+    /* Các thông số kích thước giữ nguyên */
+    padding: 15px 40px; 
+    font-size: 22px; /* Tăng nhẹ cỡ chữ cho che hết chữ gốc */
+    font-weight: 900; /* Chữ đậm hơn */
+    border-radius: 50px;
     cursor: pointer; z-index: 101; pointer-events: auto;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  }
+  
+  /* Hiệu ứng khi nhấn vào nút (làm mờ nhẹ để biết đã bấm) */
+  #startARBtn:active { 
+    transform: scale(0.95); 
+    opacity: 0.8;
   }
 
   .iconBtn {
@@ -381,7 +401,7 @@ function loadPlayer() {
     loader.load('model.glb', (gltf)=>{
         player = gltf.scene;
         // 3. ĐÃ TĂNG SIZE LINH VẬT LÊN 0.65
-        const scale = TILE_SIZE * 0.65; 
+        const scale = TILE_SIZE * 0.7; 
         player.scale.set(scale, scale, scale); 
         mazeGroup.add(player);
         updatePlayerVisualPos();
