@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0"/>
-<title>Hành Trình Linh Nghê - AR Placement</title>
+<title>Hành Trình Linh Nghê - Complete</title>
 
 <script type="importmap">
   {
@@ -47,27 +47,50 @@
   #volumeBtn { top:20px; right:20px; background-image:url('Volume_on.png'); }
   #helpBtn { bottom:20px; right:20px; background-image:url('Help.png'); }
 
+  /* Màn hình lớp phủ (Luật chơi, Win) */
   .overlay-screen {
     position: fixed; inset: 0; background: rgba(0,0,0,0.9);
-    display:none; justify-content:center; align-items:center;
+    display:none; flex-direction: column; justify-content:center; align-items:center;
     z-index: 200;
   }
-  .overlay-screen img { max-width: 95%; max-height: 90%; }
+  .overlay-screen img { max-width: 90%; max-height: 60%; object-fit: contain; margin-bottom: 20px; }
   .active { display: flex !important; }
 
-  /* Hướng dẫn đặt sàn */
+  /* Nút thoát về màn hình chính */
+  .home-btn {
+    padding: 12px 30px; font-size: 18px; font-weight: bold;
+    background: #e74c3c; color: white;
+    border: 2px solid white; border-radius: 30px;
+    cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+
+  /* UI Điểm số */
+  #game-ui {
+    position: fixed; top: 20px; left: 20px;
+    color: white; font-weight: bold; font-size: 18px;
+    text-shadow: 2px 2px 4px black;
+    z-index: 90; display: none;
+  }
+  
   #ar-guide {
     position: fixed; bottom: 50px; left:0; width:100%;
-    text-align: center; color: white; font-size: 16px;
+    text-align: center; color: yellow; font-size: 16px;
     text-shadow: 1px 1px 2px black; pointer-events: none;
-    display: none; z-index: 999;
+    display: none; z-index: 999; font-weight: bold;
   }
 </style>
 </head>
 
 <body>
 
-<div id="ar-guide">Di chuyển máy từ từ để tìm mặt sàn...</div>
+<div id="ar-guide">Quét sàn nhà để đặt Game...</div>
+<div id="game-ui">Ngọc: 0 / 10</div>
 
 <div id="introScreen">
   <button id="startARBtn" onclick="startGame()">Bắt đầu AR</button>
@@ -81,8 +104,9 @@
 </div>
 
 <div id="winScreen" class="overlay-screen">
-  <img src="Win.png" />
-  <button onclick="location.reload()" style="margin-top:20px; padding:10px 30px; font-size:20px;">Chơi lại</button>
+  <img src="Win.png" alt="Chiến Thắng" />
+  
+  <button class="home-btn" onclick="location.reload()">Về Màn Hình Chính</button>
 </div>
 
 <script>
@@ -138,29 +162,30 @@ let renderer, scene, camera;
 let mazeGroup, player, reticle;
 let hitTestSource = null;
 let hitTestSourceRequested = false;
-let isMazePlaced = false; // Cờ kiểm tra đã đặt mê cung chưa
+let isMazePlaced = false;
 
 // Game Logic Vars
-let grid = [], orbs = [];
-const ROWS=15, COLS=15, TILE_SIZE=0.15; // Giảm size chút cho dễ đặt
+let grid = [];
+let orbMeshes = [];
+const TOTAL_ORBS = 10;
+let collectedCount = 0;
+
+// === CẤU HÌNH ===
+const ROWS=15, COLS=15;
+const TILE_SIZE = 0.08; // 8cm/ô
+// ================
+
 let moveState='IDLE';
 let currentTile={r:1, c:1}, targetTile={r:1, c:1};
 let currentDir={r:0, c:0}, nextDir={r:0, c:0};
 
 // --- AR INITIALIZATION ---
 window.initARSession = async function() {
-    if (!navigator.xr) {
-        alert("Thiết bị không hỗ trợ WebXR"); return;
-    }
+    if (!navigator.xr) { alert("Thiết bị không hỗ trợ WebXR"); return; }
     try {
-        // Yêu cầu 'hit-test' để tìm mặt sàn
-        const session = await navigator.xr.requestSession('immersive-ar', {
-            requiredFeatures: ['local', 'hit-test'] 
-        });
+        const session = await navigator.xr.requestSession('immersive-ar', { requiredFeatures: ['local', 'hit-test'] });
         setupThree(session);
-    } catch (e) {
-        alert("Lỗi mở AR: " + e.message);
-    }
+    } catch (e) { alert("Lỗi mở AR: " + e.message); }
 };
 
 function setupThree(session) {
@@ -175,70 +200,60 @@ function setupThree(session) {
     document.body.appendChild(renderer.domElement);
 
     // Light
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
-    const dl = new THREE.DirectionalLight(0xffffff, 0.5);
-    dl.position.set(2,5,2);
-    scene.add(dl);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
+    scene.add(hemiLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(5,10,5);
+    scene.add(dirLight);
 
-    // 1. TẠO VÒNG TRÒN ĐỊNH VỊ (RETICLE)
+    // Reticle
     reticle = new THREE.Mesh(
         new THREE.RingGeometry(0.1, 0.11, 32).rotateX(-Math.PI / 2),
-        new THREE.MeshBasicMaterial({ color: 0xffffff })
+        new THREE.MeshBasicMaterial({ color: 0xffff00 })
     );
     reticle.matrixAutoUpdate = false;
     reticle.visible = false;
     scene.add(reticle);
 
-    // 2. TẠO MÊ CUNG (Ban đầu ẩn đi)
+    // Maze Group
     mazeGroup = new THREE.Group();
-    mazeGroup.visible = false; // Chưa đặt thì chưa hiện
+    mazeGroup.visible = false;
     scene.add(mazeGroup);
 
     createMaze();
+    spawnOrbs();
     loadPlayer();
 
-    // Sự kiện chạm màn hình (Select)
     session.addEventListener('select', onSelect);
-
-    // Hiện hướng dẫn
     document.getElementById('ar-guide').style.display = 'block';
 
     renderer.setAnimationLoop(render);
-    setupTouch(); // Vuốt tay
+    setupTouch();
 }
 
-// Xử lý khi chạm màn hình
 function onSelect() {
     if (reticle.visible && !isMazePlaced) {
-        // Đặt mê cung tại vị trí vòng tròn
         mazeGroup.position.setFromMatrixPosition(reticle.matrix);
         mazeGroup.visible = true;
         isMazePlaced = true;
         
-        // Ẩn vòng tròn và hướng dẫn
         reticle.visible = false;
         document.getElementById('ar-guide').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'block'; 
     }
 }
 
-// --- RENDER LOOP ---
 function render(timestamp, frame) {
     if (frame) {
-        // 1. Logic Hit-Test (Tìm mặt sàn)
         if (!isMazePlaced) {
             const referenceSpace = renderer.xr.getReferenceSpace();
             const session = renderer.xr.getSession();
 
-            if (hitTestSourceRequested === false) {
+            if (!hitTestSourceRequested) {
                 session.requestReferenceSpace('viewer').then((refSpace) => {
-                    session.requestHitTestSource({ space: refSpace }).then((source) => {
-                        hitTestSource = source;
-                    });
+                    session.requestHitTestSource({ space: refSpace }).then((source) => { hitTestSource = source; });
                 });
-                session.addEventListener('end', () => {
-                    hitTestSourceRequested = false;
-                    hitTestSource = null;
-                });
+                session.addEventListener('end', () => { hitTestSourceRequested = false; hitTestSource = null; });
                 hitTestSourceRequested = true;
             }
 
@@ -251,63 +266,118 @@ function render(timestamp, frame) {
                     document.getElementById('ar-guide').innerText = "Chạm màn hình để đặt Game";
                 } else {
                     reticle.visible = false;
-                    document.getElementById('ar-guide').innerText = "Di chuyển máy từ từ để tìm mặt sàn...";
+                    document.getElementById('ar-guide').innerText = "Quét sàn nhà để đặt Game...";
                 }
             }
         }
 
-        // 2. Logic Game (Chỉ chạy khi đã đặt mê cung)
         if (isMazePlaced && player) {
             updatePlayerMovement();
+            animateOrbs();
         }
     }
     renderer.render(scene, camera);
 }
 
-// --- GAME LOGIC ---
+// --- LOGIC ---
 function createMaze() {
-    // Sàn của mê cung
     const fGeo = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE);
-    const fMat = new THREE.MeshBasicMaterial({color: 0x222222, transparent:true, opacity:0.8});
-    // Tường
+    const fMat = new THREE.MeshBasicMaterial({color: 0x222222, transparent:true, opacity:0.6});
     const wGeo = new THREE.BoxGeometry(TILE_SIZE, TILE_SIZE, TILE_SIZE);
     const wMat = new THREE.MeshStandardMaterial({color: 0x8e44ad});
 
     for(let r=0; r<ROWS; r++){
         grid[r] = [];
         for(let c=0; c<COLS; c++){
-            let isWall = (r==0 || r==ROWS-1 || c==0 || c==COLS-1 || Math.random()<0.2);
+            let isWall = (r==0 || r==ROWS-1 || c==0 || c==COLS-1 || Math.random()<0.25);
             if(r==1 && c==1) isWall=false; 
             
             grid[r][c] = isWall ? 1 : 0;
-            
             let x = (c - COLS/2) * TILE_SIZE;
             let z = (r - ROWS/2) * TILE_SIZE;
             
             if(isWall){
                 let m = new THREE.Mesh(wGeo, wMat);
-                m.position.set(x, TILE_SIZE/2, z);
+                m.position.set(x, TILE_SIZE/2, z); 
                 mazeGroup.add(m);
             } else {
                 let f = new THREE.Mesh(fGeo, fMat);
                 f.rotation.x = -Math.PI/2;
-                f.position.set(x, 0, z);
+                f.position.set(x, 0.005, z);
                 mazeGroup.add(f);
             }
         }
     }
 }
 
+function spawnOrbs() {
+    const orbGeo = new THREE.SphereGeometry(TILE_SIZE * 0.25, 16, 16);
+    const orbMat = new THREE.MeshStandardMaterial({color: 0xffd700, emissive: 0xaa6600});
+
+    let count = 0;
+    while(count < TOTAL_ORBS){
+        let r = Math.floor(Math.random() * (ROWS-2)) + 1;
+        let c = Math.floor(Math.random() * (COLS-2)) + 1;
+        if(grid[r][c] === 0 && !(r==1 && c==1)) {
+            const exists = orbMeshes.find(o => o.userData.r === r && o.userData.c === c);
+            if(!exists){
+                let orb = new THREE.Mesh(orbGeo, orbMat);
+                let x = (c - COLS/2) * TILE_SIZE;
+                let z = (r - ROWS/2) * TILE_SIZE;
+                orb.position.set(x, TILE_SIZE * 0.3, z);
+                orb.userData = { r: r, c: c, active: true };
+                mazeGroup.add(orb);
+                orbMeshes.push(orb);
+                count++;
+            }
+        }
+    }
+}
+
+function animateOrbs() {
+    const time = Date.now() * 0.002;
+    orbMeshes.forEach(orb => {
+        if(orb.userData.active) {
+            orb.position.y = (TILE_SIZE * 0.3) + Math.sin(time) * 0.01;
+            orb.rotation.y += 0.05;
+        }
+    });
+}
+
+function checkCollection() {
+    orbMeshes.forEach(orb => {
+        if (orb.userData.active && orb.userData.r === currentTile.r && orb.userData.c === currentTile.c) {
+            orb.userData.active = false;
+            orb.visible = false;
+            collectedCount++;
+            document.getElementById('game-ui').innerText = `Ngọc: ${collectedCount} / ${TOTAL_ORBS}`;
+            
+            // THẮNG GAME
+            if(collectedCount >= TOTAL_ORBS) {
+                setTimeout(() => {
+                    document.getElementById('winScreen').classList.add('active');
+                    document.getElementById('game-ui').style.display = 'none';
+                    // Thoát khỏi chế độ AR để hiện UI rõ hơn (tuỳ chọn)
+                    renderer.xr.getSession().end();
+                }, 500);
+            }
+        }
+    });
+}
+
 function loadPlayer() {
     const loader = new GLTFLoader();
     loader.load('model.glb', (gltf)=>{
         player = gltf.scene;
-        player.scale.set(0.08, 0.08, 0.08); // Scale nhỏ lại cho hợp AR
+        const scale = TILE_SIZE * 0.4; 
+        player.scale.set(scale, scale, scale); 
         mazeGroup.add(player);
         updatePlayerVisualPos();
     }, undefined, (e)=>{
-        // Fallback
-        player = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.08), new THREE.MeshStandardMaterial({color:'yellow'}));
+        player = new THREE.Mesh(
+            new THREE.BoxGeometry(TILE_SIZE*0.4, TILE_SIZE*0.4, TILE_SIZE*0.4), 
+            new THREE.MeshStandardMaterial({color:'red'})
+        );
         mazeGroup.add(player);
         updatePlayerVisualPos();
     });
@@ -325,14 +395,16 @@ function updatePlayerMovement() {
         let destX = (targetTile.c - COLS/2)*TILE_SIZE;
         let destZ = (targetTile.r - ROWS/2)*TILE_SIZE;
         let target = new THREE.Vector3(destX, 0, destZ);
-        
-        if(player.position.distanceTo(target) < 0.01) {
+        const speed = TILE_SIZE * 0.15; 
+
+        if(player.position.distanceTo(target) < speed) {
             player.position.copy(target);
             currentTile = {...targetTile};
             moveState = 'IDLE';
+            checkCollection();
         } else {
             let dir = new THREE.Vector3().subVectors(target, player.position).normalize();
-            player.position.addScaledVector(dir, 0.03); // Tốc độ di chuyển
+            player.position.addScaledVector(dir, speed);
         }
     } else if(moveState === 'IDLE') {
         if(nextDir.r!==0 || nextDir.c!==0) {
@@ -355,8 +427,7 @@ function setupTouch() {
         startY = e.touches[0].clientY;
     });
     window.addEventListener('touchend', e=>{
-        if(!isMazePlaced) return; // Chưa đặt game thì không cho vuốt
-        
+        if(!isMazePlaced) return;
         let dx = e.changedTouches[0].clientX - startX;
         let dy = e.changedTouches[0].clientY - startY;
         if(Math.abs(dx) > Math.abs(dy)) nextDir = dx>0 ? {r:0,c:1} : {r:0,c:-1};
@@ -366,4 +437,4 @@ function setupTouch() {
 </script>
 </body>
 </html>
-#v1.0.10 sửa lại logic game
+#v1.0.11
