@@ -464,37 +464,50 @@ function checkCollection() {
 function loadPlayer() {
     const loader = new GLTFLoader();
     loader.load('model.glb', (gltf)=>{
-        // 1. Tạo một cái vỏ bọc rỗng (Container)
+        // --- TẠO VỎ BỌC (CONTAINER) ---
+        // Cái này sẽ đại diện cho player trong logic di chuyển
         const playerContainer = new THREE.Group();
 
-        // 2. Lấy model 3D thật
+        // --- XỬ LÝ MODEL BÊN TRONG ---
         const model = gltf.scene;
-
-        // --- KHẮC PHỤC LỖI BỊ NGÃ ---
-        // Xoay model bên trong để nó đứng thẳng dậy
-        // Thường là xoay trục X 90 độ (Math.PI / 2)
-        // Nếu nó vẫn bị sai, hãy thử đổi dấu thành -Math.PI / 2
-        model.rotation.x = Math.PI / 2; 
         
-        // Đôi khi cần chỉnh thêm trục Y nếu mặt nó bị quay ngang
-        // model.rotation.y = Math.PI; 
-        // -----------------------------
+        // Bật đổ bóng cho đẹp (nếu có đèn shadow)
+        model.traverse((node) => {
+            if (node.isMesh) node.castShadow = true;
+        });
 
-        // 3. Bỏ model thật vào trong vỏ bọc
+        // === PHẦN QUAN TRỌNG NHẤT: CHỈNH TRỤC ===
+        // 1. Dựng đứng nhân vật (Fix lỗi bị nằm)
+        // Thường là xoay trục X 90 độ. Nếu vẫn nằm, thử đổi thành -Math.PI/2 hoặc 0
+        model.rotation.x = Math.PI / 2; 
+
+        // 2. Chỉnh hướng mặt (Fix lỗi đi ngang/đi lùi)
+        // Xoay trục Y để mặt nhân vật hướng về phía trước của Container (trục +Z)
+        // Hãy thử lần lượt các số sau nếu nhân vật đi sai hướng:
+        // 0 (Mặc định) | Math.PI (Quay ngược 180) | Math.PI/2 (90 độ) | -Math.PI/2 (-90 độ)
+        model.rotation.y = Math.PI; 
+        
+        // 3. Chỉnh tâm (Fix lỗi nhân vật bị chìm dưới sàn hoặc bay lơ lửng)
+        // Nếu nhân vật bị chìm chân, hãy tăng y lên (ví dụ: -0.04 thành 0)
+        model.position.y = -0.04; 
+        // ==========================================
+
+        // Thêm model vào vỏ bọc
         playerContainer.add(model);
 
-        // 4. Gán biến player toàn cục thành cái vỏ bọc này
-        // Từ giờ code di chuyển sẽ điều khiển cái vỏ bọc, model bên trong sẽ đi theo
+        // Gán vào biến player toàn cục
         player = playerContainer;
 
-        // Scale kích thước (áp dụng lên vỏ bọc)
+        // Chỉnh kích thước (Scale cái vỏ bọc là đủ)
         const scale = TILE_SIZE * 0.7; 
         player.scale.set(scale, scale, scale); 
         
         mazeGroup.add(player);
         updatePlayerVisualPos();
+
     }, undefined, (e)=>{
-        // Fallback nếu không load được model (Dùng khối hộp đỏ)
+        // Fallback: Nếu lỗi thì hiện cục đỏ
+        console.error(e);
         player = new THREE.Mesh(
             new THREE.BoxGeometry(TILE_SIZE*0.6, TILE_SIZE*0.6, TILE_SIZE*0.6), 
             new THREE.MeshStandardMaterial({color:'red'})
@@ -512,31 +525,50 @@ function updatePlayerVisualPos(){
 }
 
 function updatePlayerMovement() {
+    // Nếu chưa có player (đang load) thì thoát
+    if (!player) return;
+
     if(moveState === 'MOVING') {
         let destX = (targetTile.c - COLS/2)*TILE_SIZE;
         let destZ = (targetTile.r - ROWS/2)*TILE_SIZE;
-        let target = new THREE.Vector3(destX, 0, destZ);
-        const speed = TILE_SIZE * 0.15; 
+        let targetPos = new THREE.Vector3(destX, 0, destZ);
+        
+        const speed = TILE_SIZE * 0.15; // Tốc độ di chuyển
 
-        if(player.position.distanceTo(target) < speed) {
-            player.position.copy(target);
+        // --- CẬP NHẬT HƯỚNG MẶT (LOOK AT) ---
+        // Chỉ xoay vỏ bọc (Container), model bên trong sẽ xoay theo
+        // Quan trọng: lookAt cùng độ cao Y để không bị cắm đầu xuống đất
+        player.lookAt(destX, player.position.y, destZ); 
+        // -------------------------------------
+
+        if(player.position.distanceTo(targetPos) < speed) {
+            // Đã đến nơi
+            player.position.copy(targetPos);
             currentTile = {...targetTile};
             moveState = 'IDLE';
             checkCollection();
         } else {
-            let dir = new THREE.Vector3().subVectors(target, player.position).normalize();
+            // Đang di chuyển
+            let dir = new THREE.Vector3().subVectors(targetPos, player.position).normalize();
             player.position.addScaledVector(dir, speed);
         }
+
     } else if(moveState === 'IDLE') {
-        if(nextDir.r!==0 || nextDir.c!==0) {
-           let nr = currentTile.r + nextDir.r;
-           let nc = currentTile.c + nextDir.c;
-           if(grid[nr] && grid[nr][nc] === 0) {
-               targetTile = {r:nr, c:nc};
-               moveState = 'MOVING';
-               player.lookAt((nc-COLS/2)*TILE_SIZE, 0, (nr-ROWS/2)*TILE_SIZE);
-           }
-           nextDir={r:0,c:0};
+        if(nextDir.r !== 0 || nextDir.c !== 0) {
+            let nr = currentTile.r + nextDir.r;
+            let nc = currentTile.c + nextDir.c;
+            
+            // Kiểm tra đường đi (grid = 0 là đường đi)
+            if(grid[nr] && grid[nr][nc] === 0) {
+                targetTile = {r: nr, c: nc};
+                moveState = 'MOVING';
+                
+                // Xoay mặt ngay lập tức về ô sắp đi tới
+                let destX = (nc - COLS/2)*TILE_SIZE;
+                let destZ = (nr - ROWS/2)*TILE_SIZE;
+                player.lookAt(destX, player.position.y, destZ);
+            }
+            nextDir = {r:0, c:0};
         }
     }
 }
@@ -558,4 +590,4 @@ function setupTouch() {
 </script>
 </body>
 </html>
-#v1.0.19
+#v1.0.20
