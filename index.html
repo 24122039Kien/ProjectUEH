@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0"/>
-<title>Hành Trình Linh Nghê - Final Color</title>
+<title>Hành Trình Linh Nghê - Final Timer</title>
 
 <script type="importmap">
   {
@@ -29,29 +29,18 @@
   }
   
   #startARBtn {
-    /* 1. VỊ TRÍ: Giảm số này để đưa nút LÊN CAO che chữ "Bắt đầu" gốc */
-    /* Code cũ là 150px, hãy thử giảm xuống khoảng 70px - 90px */
-    margin-top: 10px; 
-    
-    /* 2. MÀU SẮC: Đổi thành màu kem nhạt để trùng với nền ảnh */
+    margin-top: -10px; 
     background: #FEF7E6; 
-    
-    /* Màu chữ: Dùng màu xanh cổ vịt đậm cho giống thiết kế */
     color: #0E5C6C; 
-
-    /* 3. THẨM MỸ: Bỏ viền và bóng để nút trông như một phần của ảnh */
     border: none; 
     box-shadow: none;
-    
-    /* Các thông số kích thước giữ nguyên */
     padding: 15px 40px; 
-    font-size: 22px; /* Tăng nhẹ cỡ chữ cho che hết chữ gốc */
-    font-weight: 900; /* Chữ đậm hơn */
+    font-size: 22px; 
+    font-weight: 900; 
     border-radius: 50px;
     cursor: pointer; z-index: 101; pointer-events: auto;
   }
   
-  /* Hiệu ứng khi nhấn vào nút (làm mờ nhẹ để biết đã bấm) */
   #startARBtn:active { 
     transform: scale(0.95); 
     opacity: 0.8;
@@ -83,24 +72,19 @@
 
   #game-ui {
     position: fixed; 
-    top: 15%; /* Cách đỉnh màn hình một chút để tránh logo (nếu có) */
+    top: 15%; 
     left: 0; 
-    width: 100%; /* Chiếm hết chiều ngang để canh giữa chuẩn */
-    text-align: center; /* Canh giữa chữ */
-    
-    /* Font chữ & Màu sắc */
-    color: #ffaa00; /* Màu cam vàng giống trong hình */
-    font-size: 28px; /* Chữ to hơn */
-    font-weight: 900; /* Chữ siêu đậm */
-    font-family: sans-serif; /* Hoặc font thư pháp nếu bạn có import */
-    
-    /* Tạo viền chữ (Stroke) màu nâu đỏ cho nổi bật */
+    width: 100%; 
+    text-align: center; 
+    color: #ffaa00; 
+    font-size: 24px; /* Chữ vừa phải */
+    font-weight: 900; 
+    font-family: sans-serif; 
     -webkit-text-stroke: 1px #5e3000; 
     text-shadow: 2px 2px 0px #5e3000;
-    
     z-index: 90; 
-    display: none; /* Mặc định ẩn, vào game mới hiện */
-    pointer-events: none; /* Để bấm xuyên qua được */
+    display: none; 
+    pointer-events: none; 
   }
   
   #ar-guide {
@@ -110,27 +94,21 @@
     display: none; z-index: 999; font-weight: bold;
   }
   
-  /* Bảng báo lỗi (Chỉ hiện khi code sập) */
   #error-console {
     position: fixed; top:0; left:0; width:100%; background:rgba(200,0,0,0.8);
     color:white; font-size:12px; pointer-events:none; z-index:99999; display:none;
   }
-  /* Khung viền AR Overlay */
+  
   #ar-overlay {
     position: fixed; 
     top: 0; left: 0; width: 100%; height: 100%;
-    z-index: 80; /* Cao hơn game 3D nhưng thấp hơn các nút bấm */
-    
-    /* QUAN TRỌNG: Cho phép vuốt tay xuyên qua hình này để chơi game */
+    z-index: 80; 
     pointer-events: none; 
-    
-    /* Thay tên file ảnh khung viền của bạn vào đây (phải là PNG nền trong suốt) */
     background-image: url('Frame.png'); 
     background-size: cover; 
     background-position: center;
     background-repeat: no-repeat;
-    
-    display: none; /* Mặc định ẩn, khi vào AR mới hiện */
+    display: none; 
   }
 </style>
 </head>
@@ -139,7 +117,15 @@
 
 <div id="error-console"></div>
 <div id="ar-guide">Quét sàn nhà để đặt Game...</div>
-<div id="game-ui">Ngọc: 0 / 10</div>
+
+<div id="game-ui">
+  Số ngọc đã thu thập:<br>
+  <span id="scoreText" style="color: yellow; font-size: 1.3em;">0</span> / 10
+  <div style="margin-top: 5px; font-size: 0.8em; color: white; -webkit-text-stroke: 0px;">
+    ⏱ <span id="timeText">00:00</span>
+  </div>
+</div>
+
 <div id="ar-overlay"></div>
 
 <div id="introScreen">
@@ -155,11 +141,16 @@
 
 <div id="winScreen" class="overlay-screen">
   <img src="Win.png" alt="Chiến Thắng" />
+  
+  <div id="finalTime" style="color: #ffaa00; font-size: 24px; font-weight: 900; margin-bottom: 20px; text-shadow: 2px 2px 0 #5e3000;">
+    Thời gian: 00:00
+  </div>
+  
   <button class="home-btn" onclick="location.reload()">Về Màn Hình Chính</button>
 </div>
 
 <script>
-// Biến cờ kiểm tra: false = Đang xem Help, true = Đang quy trình vào Game
+// Biến cờ kiểm tra
 let isGameMode = false;
 
 // Bắt lỗi hệ thống
@@ -175,48 +166,37 @@ const ruleScreen = document.getElementById('ruleScreen');
 const ruleImage = document.getElementById('ruleImage');
 const introScreen = document.getElementById('introScreen');
 
-// 1. NÚT HELP: Chỉ hiện Lời Ngỏ
+// 1. NÚT HELP
 function showHelp() {
-    isGameMode = false; // Đánh dấu: Chỉ xem chơi thôi
+    isGameMode = false; 
     ruleImage.src = "LoiNgo.png"; 
     ruleScreen.classList.add('active');
 }
 
-// 2. NÚT BẮT ĐẦU: Hiện Luật Chơi trước -> Rồi mới vào AR
+// 2. NÚT BẮT ĐẦU
 function startGame() {
     bgMusic.play().catch(e=>{});
-    
-    // Ẩn màn hình intro
     introScreen.style.display = 'none';
-    
-    // Đánh dấu: Đang bắt đầu vào game
     isGameMode = true; 
-    
-    // Hiện ảnh Luật chơi
     ruleImage.src = "LuatChoi.png"; 
     ruleScreen.classList.add('active');
 }
 
-// 3. KHI NHẤN VÀO MÀN HÌNH (Để tắt bảng)
+// 3. KHI NHẤN VÀO MÀN HÌNH
 function nextSlide() {
-    // Tắt bảng đi
     ruleScreen.classList.remove('active');
-
-    // Kiểm tra xem nãy bấm nút nào?
     if (isGameMode === true) {
-    // Nếu nãy bấm Bắt Đầu -> Giờ mới gọi WebAR
-    if (window.initARSession) {
-        window.initARSession();
-    } else {
-        alert("Lỗi: Module AR chưa tải xong!");
-        introScreen.style.display = 'flex'; // Hiện lại intro nếu lỗi
+      if (window.initARSession) {
+          window.initARSession();
+      } else {
+          alert("Lỗi: Module AR chưa tải xong!");
+          introScreen.style.display = 'flex'; 
+      }
+      isGameMode = false; 
     }
-    isGameMode = false; // Reset trạng thái
-    }
-    // Nếu isGameMode là false (nãy bấm Help) thì tắt bảng là xong.
 }
 
-// LOGIC ÂM THANH (Giữ nguyên)
+// LOGIC ÂM THANH
 const bgMusic = new Audio("Audio.mp3");
 bgMusic.loop = true;
 let isMuted = false;
@@ -236,8 +216,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 let renderer, scene, camera;
 let mazeGroup, player, reticle;
 let hitTestSource = null, hitTestSourceRequested = false, isMazePlaced = false;
-
 let grid = [], orbMeshes = [];
+
+// --- BIẾN THỜI GIAN ---
+let gameStartTime;
+let gameTimerInterval;
+
 // --- CẤU HÌNH ---
 const ROWS = 15, COLS = 15;
 const TILE_SIZE = 0.08; 
@@ -251,7 +235,11 @@ let currentDir={r:0, c:0}, nextDir={r:0, c:0};
 window.initARSession = async function() {
     if (!navigator.xr) { alert("Thiết bị không hỗ trợ AR"); return; }
     try {
-        const session = await navigator.xr.requestSession('immersive-ar', { requiredFeatures: ['local', 'hit-test'] });
+        const session = await navigator.xr.requestSession('immersive-ar', { 
+            requiredFeatures: ['local', 'hit-test'],
+            optionalFeatures: ['dom-overlay'], 
+            domOverlay: { root: document.body } 
+        });
         setupThree(session);
     } catch (e) { alert("Lỗi mở AR: " + e.message); }
 };
@@ -267,7 +255,7 @@ function setupThree(session) {
     renderer.xr.setReferenceSpaceType('local');
     document.body.appendChild(renderer.domElement);
 
-    // Hiện khung viền ngay lập tức khi Camera AR vừa bật lên
+    // Hiện khung viền ngay lập tức
     document.getElementById('ar-overlay').style.display = 'block';
 
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
@@ -288,7 +276,6 @@ function setupThree(session) {
     mazeGroup.visible = false;
     scene.add(mazeGroup);
 
-    // GỌI HÀM TẠO MÊ CUNG MỚI (Đã đồng bộ tên hàm)
     createMazeDFS(); 
     spawnOrbs();
     loadPlayer();
@@ -299,12 +286,30 @@ function setupThree(session) {
     setupTouch();
 }
 
+// HÀM ĐẾM GIỜ MỚI
+function startGameTimer() {
+    gameStartTime = Date.now();
+    gameTimerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+        const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+        const seconds = (elapsed % 60).toString().padStart(2, '0');
+        
+        // Cập nhật đồng hồ (không ảnh hưởng đến điểm số)
+        const timeDom = document.getElementById('timeText');
+        if(timeDom) timeDom.innerText = `${minutes}:${seconds}`;
+    }, 1000);
+}
+
 function onSelect() {
     if (reticle.visible && !isMazePlaced) {
         mazeGroup.position.setFromMatrixPosition(reticle.matrix);
         mazeGroup.visible = true;
         isMazePlaced = true;
         reticle.visible = false;
+        
+        // Bắt đầu đếm giờ khi đặt game
+        startGameTimer();
+        
         document.getElementById('ar-guide').style.display = 'none';
         document.getElementById('game-ui').style.display = 'block'; 
     }
@@ -343,21 +348,17 @@ function render(timestamp, frame) {
     renderer.render(scene, camera);
 }
 
-// === TẠO MÊ CUNG (Thuật toán DFS + Màu Mới) ===
 function createMazeDFS() {
-    // 1. ÁP DỤNG MÃ MÀU BẠN YÊU CẦU (Đã chuyển sang 0x)
-    const wallColor = 0x5198A5; // Màu tường sáng
-    const floorColor = 0x00598B; // Màu sàn đậm
+    const wallColor = 0x5198A5; 
+    const floorColor = 0x00598B; 
 
     const fGeo = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE);
     const fMat = new THREE.MeshBasicMaterial({color: floorColor, transparent:true, opacity:0.9});
     const wGeo = new THREE.BoxGeometry(TILE_SIZE, TILE_SIZE, TILE_SIZE);
     const wMat = new THREE.MeshStandardMaterial({color: wallColor});
 
-    // Reset lưới
     grid = Array.from({length: ROWS}, () => Array(COLS).fill(1));
 
-    // Đào đường
     const dirs = [[0,2], [0,-2], [2,0], [-2,0]]; 
     function carve(r, c) {
         grid[r][c] = 0;
@@ -372,19 +373,16 @@ function createMazeDFS() {
     }
     carve(1, 1);
 
-    // Đục thêm lỗ ngẫu nhiên (để dễ chơi hơn)
     for(let i=0; i<15; i++){
         let r = Math.floor(Math.random()*(ROWS-2))+1;
         let c = Math.floor(Math.random()*(COLS-2))+1;
         grid[r][c] = 0;
     }
 
-    // Vẽ 3D
     for(let r=0; r<ROWS; r++){
         for(let c=0; c<COLS; c++){
             let x = (c - COLS/2) * TILE_SIZE;
             let z = (r - ROWS/2) * TILE_SIZE;
-            
             if(grid[r][c] === 1){ 
                 let m = new THREE.Mesh(wGeo, wMat);
                 m.position.set(x, TILE_SIZE/2, z); 
@@ -405,7 +403,6 @@ function spawnOrbs() {
 
     let count = 0;
     let attempts = 0;
-    // Thêm break loop an toàn để tránh treo trình duyệt
     while(count < TOTAL_ORBS && attempts < 2000){
         attempts++;
         let r = Math.floor(Math.random() * (ROWS-2)) + 1;
@@ -443,9 +440,17 @@ function checkCollection() {
             orb.userData.active = false;
             orb.visible = false;
             let collected = orbMeshes.filter(o => !o.userData.active).length;
-            document.getElementById('game-ui').innerText = `Ngọc: ${collected} / ${TOTAL_ORBS}`;
+            
+            // CẬP NHẬT ĐIỂM SỐ (Chỉ update phần số)
+            const scoreDom = document.getElementById('scoreText');
+            if(scoreDom) scoreDom.innerText = collected;
             
             if(collected >= TOTAL_ORBS) {
+                // DỪNG ĐỒNG HỒ & HIỆN KẾT QUẢ
+                clearInterval(gameTimerInterval);
+                const finalTimeStr = document.getElementById('timeText').innerText;
+                document.getElementById('finalTime').innerText = `Thành tích: ${finalTimeStr}`;
+
                 setTimeout(() => {
                     document.getElementById('winScreen').classList.add('active');
                     document.getElementById('game-ui').style.display = 'none';
@@ -460,7 +465,6 @@ function loadPlayer() {
     const loader = new GLTFLoader();
     loader.load('model.glb', (gltf)=>{
         player = gltf.scene;
-        // 3. ĐÃ TĂNG SIZE LINH VẬT LÊN 0.65
         const scale = TILE_SIZE * 0.7; 
         player.scale.set(scale, scale, scale); 
         mazeGroup.add(player);
@@ -529,3 +533,4 @@ function setupTouch() {
 </script>
 </body>
 </html>
+#v1.0.18
