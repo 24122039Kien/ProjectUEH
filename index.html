@@ -464,45 +464,44 @@ function checkCollection() {
 function loadPlayer() {
     const loader = new GLTFLoader();
     loader.load('model.glb', (gltf)=>{
-        // Tạo vỏ bọc
         const playerContainer = new THREE.Group();
         const model = gltf.scene;
-        
-        // Bật bóng đổ
-        model.traverse((node) => {
-            if (node.isMesh) node.castShadow = true;
-        });
 
-        // --- SỬA LẠI PHẦN NÀY ---
-        // 1. Trả lại góc xoay mặc định (xóa bỏ đoạn Math.PI/2 hôm qua)
-        // Nếu thay code này vào mà nó VẪN NẰM, bạn mới sửa dòng dưới thành: Math.PI / 2
-        model.rotation.set(0, 0, 0); 
-        
-        // 2. Nếu nhân vật đứng thẳng nhưng mặt bị quay lưng lại hoặc quay ngang
-        // Thì bạn chỉnh số ở giữa (trục Y). Ví dụ: Math.PI (180 độ) hoặc Math.PI/2 (90 độ)
-        model.rotation.y = Math.PI; // Thường model sẽ bị ngược, nên xoay 180 độ
-        
-        // 3. Chỉnh độ cao model trong vỏ bọc
-        model.position.set(0, 0, 0);
-        // -------------------------
+        model.traverse((node) => { if (node.isMesh) node.castShadow = true; });
 
+        // Số 0: Mặc định
+        // Số 1: Xoay 90 độ (Nếu đang đi ngang sang Phải)
+        // Số 2: Xoay 180 độ (Nếu đang đi lùi / Moonwalk)
+        // Số 3: Xoay -90 độ (Nếu đang đi ngang sang Trái)
+        
+        const TRUONG_HOP = 2; // <--- Thay số 0, 1, 2, hoặc 3 vào đây
+        
+        // ==============================================================
+
+        // Logic xử lý xoay tự động dựa trên số bạn chọn
+        model.rotation.set(0, 0, 0); // Reset trước
+        
+        if (TRUONG_HOP === 1) model.rotation.y = Math.PI / 2;
+        else if (TRUONG_HOP === 2) model.rotation.y = Math.PI;
+        else if (TRUONG_HOP === 3) model.rotation.y = -Math.PI / 2;
+        // Nếu là 0 thì giữ nguyên rotation.y = 0
+
+        // Fix lỗi nằm (nếu model của bạn bị nằm sấp thì mở dòng dưới ra)
+        // model.rotation.x = Math.PI / 2; 
+
+        model.position.set(0, 0, 0); 
         playerContainer.add(model);
         player = playerContainer;
 
-        // Scale
         const scale = TILE_SIZE * 0.7; 
         player.scale.set(scale, scale, scale); 
         
         mazeGroup.add(player);
         updatePlayerVisualPos();
-
     }, undefined, (e)=>{
         console.error(e);
-        // Fallback khối đỏ
-        player = new THREE.Mesh(
-            new THREE.BoxGeometry(TILE_SIZE*0.6, TILE_SIZE*0.6, TILE_SIZE*0.6), 
-            new THREE.MeshStandardMaterial({color:'red'})
-        );
+        // Fallback
+        player = new THREE.Mesh(new THREE.BoxGeometry(TILE_SIZE*0.6, TILE_SIZE*0.6, TILE_SIZE*0.6), new THREE.MeshStandardMaterial({color:'red'}));
         mazeGroup.add(player);
         updatePlayerVisualPos();
     });
@@ -518,7 +517,6 @@ function updatePlayerVisualPos(){
 function updatePlayerMovement() {
     if (!player) return;
 
-    // --- LOGIC DI CHUYỂN MƯỢT ---
     if(moveState === 'MOVING') {
         let destX = (targetTile.c - COLS/2)*TILE_SIZE;
         let destZ = (targetTile.r - ROWS/2)*TILE_SIZE;
@@ -526,11 +524,8 @@ function updatePlayerMovement() {
         
         const speed = TILE_SIZE * 0.15; 
 
-        // --- KHÓA GÓC NHÌN (CHỐNG NGÃ) ---
-        // Quan trọng: Bắt nhân vật nhìn vào toạ độ đích NHƯNG giữ nguyên độ cao Y của chính nó
-        // Điều này đảm bảo nó chỉ xoay trái/phải chứ không cắm đầu xuống đất
+        // LỆNH NÀY SẼ BẮT MODEL XOAY THEO HƯỚNG ĐI
         player.lookAt(destX, player.position.y, destZ);
-        // ----------------------------------
 
         if(player.position.distanceTo(targetPos) < speed) {
             player.position.copy(targetPos);
@@ -546,12 +541,11 @@ function updatePlayerMovement() {
         if(nextDir.r !== 0 || nextDir.c !== 0) {
             let nr = currentTile.r + nextDir.r;
             let nc = currentTile.c + nextDir.c;
-            
             if(grid[nr] && grid[nr][nc] === 0) {
                 targetTile = {r: nr, c: nc};
                 moveState = 'MOVING';
                 
-                // Xoay mặt ngay lập tức về hướng sắp đi (vẫn giữ độ cao Y để không ngã)
+                // XOAY NGAY LẬP TỨC KHI VUỐT
                 let destX = (nc - COLS/2)*TILE_SIZE;
                 let destZ = (nr - ROWS/2)*TILE_SIZE;
                 player.lookAt(destX, player.position.y, destZ);
