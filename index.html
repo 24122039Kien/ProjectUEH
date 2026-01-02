@@ -463,64 +463,52 @@ function checkCollection() {
 
 function loadPlayer() {
     const loader = new GLTFLoader();
-    loader.load('model.glb', (gltf)=>{
+    loader.load('model.glb', (gltf) => {
         const playerContainer = new THREE.Group();
         const model = gltf.scene;
 
         model.traverse((node) => { if (node.isMesh) node.castShadow = true; });
 
         // ==========================================================
-        // 🔧 KHU VỰC CHỈNH SỬA (CHỈ SỬA Ở ĐÂY)
+        // 🔧 KHU VỰC CALIBRATION (CÂN CHỈNH TRỤC)
         // ==========================================================
         
-        // 1. CHỈNH ĐỨNG DẬY (Trục Đỏ - X)
-        // Nếu nhân vật nằm sấp/ngửa, thay đổi số này:
-        // 0: Mặc định
-        // 1: Dựng đứng (90 độ)
-        // -1: Dựng đứng (-90 độ)
-        const DUNG_DAY = 0; 
+        // Bước 1: Dựng nhân vật đứng dậy (Xoay trục X - Đỏ)
+        // Thử lần lượt: 0, Math.PI/2, -Math.PI/2, Math.PI
+        const ROTATE_X = 0; 
 
-        // 2. CHỈNH HƯỚNG MẶT (Trục Xanh Lá - Y)
-        // Nếu nhân vật đứng rồi nhưng mặt quay sai hướng:
-        // 0: Mặc định
-        // 1: Quay 90 độ
-        // 2: Quay 180 độ (Ngược lại)
-        // 3: Quay -90 độ
-        const XOAY_MAT = 2; 
-
+        // Bước 2: Xoay mặt nhân vật về phía trước (Xoay trục Y - Xanh Lá)
+        // MỤC TIÊU: Mặt nhân vật phải nhìn theo hướng mũi tên XANH DƯƠNG
+        // Thử lần lượt: 0, Math.PI/2, -Math.PI/2, Math.PI
+        const ROTATE_Y = Math.PI; // Thường là Math.PI (180 độ) để quay lại
+        
         // ==========================================================
 
-        // Áp dụng chỉnh sửa
-        model.rotation.set(0,0,0); // Reset
-        
-        if (DUNG_DAY === 1) model.rotation.x = Math.PI / 2;
-        if (DUNG_DAY === -1) model.rotation.x = -Math.PI / 2;
-        
-        if (XOAY_MAT === 1) model.rotation.y = Math.PI / 2;
-        if (XOAY_MAT === 2) model.rotation.y = Math.PI;
-        if (XOAY_MAT === 3) model.rotation.y = -Math.PI / 2;
+        // Áp dụng xoay
+        model.rotation.set(ROTATE_X, ROTATE_Y, 0);
 
-        model.position.set(0, 0, 0); 
+        // Đưa tâm model về giữa (nếu model bị lơ lửng)
+        model.position.set(0, 0, 0);
 
-        // --- CÔNG CỤ DEBUG (XÓA KHI ĐÃ SỬA XONG) ---
-        // Hiện 3 trục màu trên đầu nhân vật
-        // Màu ĐỎ: Phải | Màu XANH LÁ: Trên | Màu XANH DƯƠNG: Trước mặt
-        const axesHelper = new THREE.AxesHelper(1); // Số 1 là độ dài que
-        model.add(axesHelper); 
-        // -------------------------------------------
+        // --- CÔNG CỤ DEBUG CẢI TIẾN ---
+        // Quan trọng: Add vào Container để thấy hướng chuẩn của game
+        const axesHelper = new THREE.AxesHelper(2); // Dài hơn chút cho dễ nhìn
+        playerContainer.add(axesHelper);
+        // -----------------------------
 
         playerContainer.add(model);
         player = playerContainer;
 
-        const scale = TILE_SIZE * 0.7; 
-        player.scale.set(scale, scale, scale); 
-        
+        const scale = TILE_SIZE * 0.7;
+        player.scale.set(scale, scale, scale);
+
         mazeGroup.add(player);
         updatePlayerVisualPos();
-    }, undefined, (e)=>{
+        
+    }, undefined, (e) => {
         console.error(e);
-        // Fallback
-        player = new THREE.Mesh(new THREE.BoxGeometry(TILE_SIZE*0.6, TILE_SIZE*0.6, TILE_SIZE*0.6), new THREE.MeshStandardMaterial({color:'red'}));
+        // Fallback cube
+        player = new THREE.Mesh(new THREE.BoxGeometry(TILE_SIZE * 0.6, TILE_SIZE * 0.6, TILE_SIZE * 0.6), new THREE.MeshStandardMaterial({ color: 'red' }));
         mazeGroup.add(player);
         updatePlayerVisualPos();
     });
