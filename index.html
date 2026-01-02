@@ -469,27 +469,46 @@ function loadPlayer() {
 
         model.traverse((node) => { if (node.isMesh) node.castShadow = true; });
 
-        // Số 0: Mặc định
-        // Số 1: Xoay 90 độ (Nếu đang đi ngang sang Phải)
-        // Số 2: Xoay 180 độ (Nếu đang đi lùi / Moonwalk)
-        // Số 3: Xoay -90 độ (Nếu đang đi ngang sang Trái)
+        // ==========================================================
+        // 🔧 KHU VỰC CHỈNH SỬA (CHỈ SỬA Ở ĐÂY)
+        // ==========================================================
         
-        const TRUONG_HOP = 3; // <--- Thay số 0, 1, 2, hoặc 3 vào đây
-        
-        // ==============================================================
+        // 1. CHỈNH ĐỨNG DẬY (Trục Đỏ - X)
+        // Nếu nhân vật nằm sấp/ngửa, thay đổi số này:
+        // 0: Mặc định
+        // 1: Dựng đứng (90 độ)
+        // -1: Dựng đứng (-90 độ)
+        const DUNG_DAY = 0; 
 
-        // Logic xử lý xoay tự động dựa trên số bạn chọn
-        model.rotation.set(0, 0, 0); // Reset trước
-        
-        if (TRUONG_HOP === 1) model.rotation.y = Math.PI / 2;
-        else if (TRUONG_HOP === 2) model.rotation.y = Math.PI;
-        else if (TRUONG_HOP === 3) model.rotation.y = -Math.PI / 2;
-        // Nếu là 0 thì giữ nguyên rotation.y = 0
+        // 2. CHỈNH HƯỚNG MẶT (Trục Xanh Lá - Y)
+        // Nếu nhân vật đứng rồi nhưng mặt quay sai hướng:
+        // 0: Mặc định
+        // 1: Quay 90 độ
+        // 2: Quay 180 độ (Ngược lại)
+        // 3: Quay -90 độ
+        const XOAY_MAT = 2; 
 
-        // Fix lỗi nằm (nếu model của bạn bị nằm sấp thì mở dòng dưới ra)
-        // model.rotation.x = Math.PI / 2; 
+        // ==========================================================
+
+        // Áp dụng chỉnh sửa
+        model.rotation.set(0,0,0); // Reset
+        
+        if (DUNG_DAY === 1) model.rotation.x = Math.PI / 2;
+        if (DUNG_DAY === -1) model.rotation.x = -Math.PI / 2;
+        
+        if (XOAY_MAT === 1) model.rotation.y = Math.PI / 2;
+        if (XOAY_MAT === 2) model.rotation.y = Math.PI;
+        if (XOAY_MAT === 3) model.rotation.y = -Math.PI / 2;
 
         model.position.set(0, 0, 0); 
+
+        // --- CÔNG CỤ DEBUG (XÓA KHI ĐÃ SỬA XONG) ---
+        // Hiện 3 trục màu trên đầu nhân vật
+        // Màu ĐỎ: Phải | Màu XANH LÁ: Trên | Màu XANH DƯƠNG: Trước mặt
+        const axesHelper = new THREE.AxesHelper(1); // Số 1 là độ dài que
+        model.add(axesHelper); 
+        // -------------------------------------------
+
         playerContainer.add(model);
         player = playerContainer;
 
@@ -572,4 +591,4 @@ function setupTouch() {
 </script>
 </body>
 </html>
-#v1.0.21
+#v1.0.22
