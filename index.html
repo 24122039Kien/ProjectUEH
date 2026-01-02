@@ -475,12 +475,12 @@ function loadPlayer() {
         
         // Bước 1: Dựng nhân vật đứng dậy (Xoay trục X - Đỏ)
         // Thử lần lượt: 0, Math.PI/2, -Math.PI/2, Math.PI
-        const ROTATE_X = 0; 
+        const ROTATE_X = MATH.PI / 2; // Thường là Math.PI/2 (90 độ) để dựng đứng
 
         // Bước 2: Xoay mặt nhân vật về phía trước (Xoay trục Y - Xanh Lá)
         // MỤC TIÊU: Mặt nhân vật phải nhìn theo hướng mũi tên XANH DƯƠNG
         // Thử lần lượt: 0, Math.PI/2, -Math.PI/2, Math.PI
-        const ROTATE_Y = Math.PI; // Thường là Math.PI (180 độ) để quay lại
+        const ROTATE_Y = -Math.PI; // Thường là Math.PI (180 độ) để quay lại
         
         // ==========================================================
 
